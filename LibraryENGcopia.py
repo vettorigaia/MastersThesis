@@ -81,8 +81,8 @@ def cut(pos,neg,data):
     signal_mean=abs(np.mean(data))
     #signal_std=abs(scipy.stats.median_abs_deviation(data))
     signal_std=np.std(data)
-    to_drop=[]
-    for x,i in enumerate(pos):
+    pos_new=[]
+    for i in pos:
         #verifico che la finestra non esca dal segnale
         if (i-prima >= 0) and (i+dopo <= dim):
             spike= data[(int(i)-prima):(int(i)+dopo)].squeeze()
@@ -94,14 +94,11 @@ def cut(pos,neg,data):
             std=np.std(spike_std)
             if abs(std)<=2*abs(signal_std) and abs(media)<=10*abs(signal_mean):
                 pos_cut[k,:] = spike_std
+                pos_new.append(i)
                 k += 1
-            else:
-                to_drop.append(x)
-    for x in reversed(to_drop):
-        pos.pop(x)
     k=0
-    to_drop=[]
-    for x,i in enumerate(neg):
+    neg_new=[]
+    for i in neg:
         #verifico che la finestra non esca dal segnale
         if (i-prima >= 0) and (i+dopo <= dim):
             spike= data[(int(i)-prima):(int(i)+dopo)].squeeze()
@@ -113,11 +110,8 @@ def cut(pos,neg,data):
             std=np.std(spike_std)            
             if abs(std)<=2*abs(signal_std) and abs(media)<=10*abs(signal_mean): 
                 neg_cut[k,:] = spike_std
+                neg_new.append(i)
                 k  += 1
-            else:
-                to_drop.append(x)
-    for x in reversed(to_drop):
-        pos.pop(x)
     print(np.isnan(pos_cut).sum(),len(pos_cut),len(pos),np.isnan(neg_cut).sum(),len(neg_cut),len(neg))
     return pos_cut,pos,neg_cut,neg
 
