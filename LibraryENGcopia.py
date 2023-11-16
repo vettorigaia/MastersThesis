@@ -97,8 +97,8 @@ def cut(pos,neg,data):
                 k += 1
             else:
                 to_drop.append(x)
-    pos=pos.drop(index=to_drop)
-    print('non zero pos: ',k)
+    for x in reversed(to_drop):
+        pos.pop(x)
     k=0
     to_drop=[]
     for x,i in enumerate(neg):
@@ -116,8 +116,9 @@ def cut(pos,neg,data):
                 k  += 1
             else:
                 to_drop.append(x)
-    print('non zero neg: ',k)
-    print(np.isnan(pos_cut).sum(),len(pos_cut),np.isnan(neg_cut).sum(),len(neg_cut))
+    for x in reversed(to_drop):
+        pos.pop(x)
+    print(np.isnan(pos_cut).sum(),len(pos_cut),len(pos),np.isnan(neg_cut).sum(),len(neg_cut),len(neg))
     return pos_cut,pos,neg_cut,neg
 
 def RMM(data):
