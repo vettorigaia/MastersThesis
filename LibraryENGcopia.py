@@ -20,7 +20,7 @@ def find_all_spikes_new(data):
     neg=[]
     neg_data=-data
     mad=scipy.stats.median_abs_deviation(data)
-    thresh=4*mad
+    thresh=3*mad
     pos_peaks=find_peaks(data.ravel(),height=float(thresh))
     neg_peaks=find_peaks(neg_data.ravel(),height=float(thresh))
     pos=pos_peaks[0]
@@ -40,7 +40,7 @@ def find_all_spikes(data):
         window=data[i:i+window_size]
         neg_window=-window
         mad=scipy.stats.median_abs_deviation(window)
-        thresh=5*mad
+        thresh=4*mad
         pos_peaks=find_peaks(window.ravel(),height=float(thresh))
         neg_peaks=find_peaks(neg_window.ravel(),height=float(thresh))
         lp=len(pos_peaks[0])
@@ -66,6 +66,7 @@ def find_all_spikes(data):
     firing_rate=(len(pos)+len(neg))*10000/len(data)
     print('detected spikes:', len(pos)+len(neg), 'firing rate: ',firing_rate)
     return pos,neg
+
 def cut(pos,neg,data):
     pre = 0.003
     post = 0.003
@@ -73,7 +74,7 @@ def cut(pos,neg,data):
     prima = int(pre*fs)
     dopo = int(post*fs)
     lunghezza_indici = len(pos)
-    pos_cut= np.empty([lunghezza_indici, prima+dopo])
+    pos_cut= np.empty([lunghezza_indici+1, prima+dopo])
     lunghezza_neg=len(neg)
     neg_cut= np.empty([lunghezza_neg, prima+dopo])
     dim = data.shape[0]
@@ -96,6 +97,8 @@ def cut(pos,neg,data):
                 pos_cut[k,:] = spike_std
                 pos_new.append(i)
                 k += 1
+    possize=k
+    pos_cut=pos_cut[0:possize]
     k=0
     neg_new=[]
     for i in neg:
@@ -112,8 +115,10 @@ def cut(pos,neg,data):
                 neg_cut[k,:] = spike_std
                 neg_new.append(i)
                 k  += 1
-    print(np.isnan(pos_cut).sum(),len(pos_cut),len(pos),np.isnan(neg_cut).sum(),len(neg_cut),len(neg))
-    return pos_cut,pos,neg_cut,neg
+    negsize=k
+    neg_cut=neg_cut[0:negsize]
+    print(np.isnan(pos_cut).sum(),len(pos_cut),len(pos_new),np.isnan(neg_cut).sum(),len(neg_cut),len(neg_new))
+    return pos_cut,pos_new,neg_cut,neg_new
 
 def RMM(data):
     # window size 30ms, threshold for first spike: 3*mad(window), threshold for second spike: 1.1 mean(window)
@@ -803,7 +808,7 @@ def clus(cut,analysis,clustering,spike_list,n,len_data):
         num_clusters = len(np.unique(labels[labels != -1]))
         print("For", num_clusters,"clusters, the silhouette score is:", silhouette_avg)
 
-    fig = plt.figure(figsize=(8, 12))
+    fig = plt.figure(figsize=(4, 6))
 
     # Iterate over unique cluster labels
     for i, cluster_label in enumerate(unique_labels):
@@ -835,7 +840,7 @@ def clus(cut,analysis,clustering,spike_list,n,len_data):
         final_data.append(ul)
         plt.subplot(len(unique_labels), 1, i + 1)
         plt.hist(np.diff(ul), bins=300, density=True, alpha=0.5, color='blue', edgecolor='black')
-        plt.title(f'ISI: Cluster {i} numerosity: {len(final_data[i])}, firing rate: {len(final_data)*10000/len_data}')
-    plt.subplots_adjust(hspace=1.5)
+        plt.title(f'ISI: Cluster {i} numerosity: {len(final_data[i])}, firing rate: {len(final_data[i])*10000/len_data}')
+    plt.subplots_adjust(hspace=0.5)
     plt.show()
     return final_data
