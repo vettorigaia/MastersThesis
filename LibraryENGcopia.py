@@ -67,8 +67,8 @@ def find_all_spikes(data):
     print('detected spikes:', len(pos)+len(neg), 'firing rate: ',firing_rate)
     return pos,neg
 def cut(pos,neg,data):
-    pre = 0.001
-    post = 0.002
+    pre = 0.003
+    post = 0.003
     fs=10000
     prima = int(pre*fs)
     dopo = int(post*fs)
@@ -78,30 +78,47 @@ def cut(pos,neg,data):
     neg_cut= np.empty([lunghezza_neg, prima+dopo])
     dim = data.shape[0]
     k=0
-    #signal_mean=np.mean(data)
-    #signal_std=scipy.stats.median_abs_deviation(data)
-    for i in pos:
+    signal_mean=abs(np.mean(data))
+    #signal_std=abs(scipy.stats.median_abs_deviation(data))
+    signal_std=np.std(data)
+    to_drop=[]
+    for x,i in enumerate(pos):
         #verifico che la finestra non esca dal segnale
         if (i-prima >= 0) and (i+dopo <= dim):
             spike= data[(int(i)-prima):(int(i)+dopo)].squeeze()
-            #media=(np.mean(spike))
+            media=(np.mean(spike))
             #std=scipy.stats.median_abs_deviation(spike)
-            #if std<=3*signal_std:# media<=signal_mean: #and 
-            pos_cut[k,:] = spike
-            k += 1
+            std=np.std(spike)
+            spike_std=(spike-media)/std
+            media=np.mean(spike_std)
+            std=np.std(spike_std)
+            if abs(std)<=2*abs(signal_std) and abs(media)<=10*abs(signal_mean):
+                pos_cut[k,:] = spike_std
+                k += 1
+            else:
+                to_drop.append(x)
+    pos=pos.drop(index=to_drop)
+    print('non zero pos: ',k)
     k=0
-    for i in neg:
+    to_drop=[]
+    for x,i in enumerate(neg):
         #verifico che la finestra non esca dal segnale
         if (i-prima >= 0) and (i+dopo <= dim):
             spike= data[(int(i)-prima):(int(i)+dopo)].squeeze()
-            #media=(np.mean(spike))
+            media=(np.mean(spike))
             #std=scipy.stats.median_abs_deviation(spike)
-            #if std<=3*signal_std:# media<=signal_mean: #and 
-            neg_cut[k,:] = spike
-            k += 1
-
+            std=np.std(spike)
+            spike_std=(spike-media)/std
+            media=np.mean(spike_std)
+            std=np.std(spike_std)            
+            if abs(std)<=2*abs(signal_std) and abs(media)<=10*abs(signal_mean): 
+                neg_cut[k,:] = spike_std
+                k  += 1
+            else:
+                to_drop.append(x)
+    print('non zero neg: ',k)
     print(np.isnan(pos_cut).sum(),len(pos_cut),np.isnan(neg_cut).sum(),len(neg_cut))
-    return pos_cut,neg_cut
+    return pos_cut,pos,neg_cut,neg
 
 def RMM(data):
     # window size 30ms, threshold for first spike: 3*mad(window), threshold for second spike: 1.1 mean(window)
@@ -741,9 +758,13 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
     return y
 
 
-def clus_funziona(cut,analysis,clustering,spike_list,n):
+def clus(cut,analysis,clustering,spike_list,n,len_data):
     from sklearn.cluster import KMeans
+    from sklearn.cluster import DBSCAN
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
     from sklearn.decomposition import FastICA
+    from sklearn.metrics import silhouette_score
     from scipy.stats import kurtosis
     import numpy as np
     if analysis=='PCA':        
@@ -787,7 +808,7 @@ def clus_funziona(cut,analysis,clustering,spike_list,n):
         num_clusters = len(np.unique(labels[labels != -1]))
         print("For", num_clusters,"clusters, the silhouette score is:", silhouette_avg)
 
-    fig = plt.figure(figsize=(6, 8))
+    fig = plt.figure(figsize=(8, 12))
 
     # Iterate over unique cluster labels
     for i, cluster_label in enumerate(unique_labels):
@@ -811,7 +832,7 @@ def clus_funziona(cut,analysis,clustering,spike_list,n):
 
     # Adjust layout to prevent overlapping
     #plt.tight_layout()
-    plt.subplots_adjust(hspace=0.5)
+    plt.subplots_adjust(hspace=1.5)
     plt.show()
     spike_list=np.array(spike_list)
     for i in unique_labels:
@@ -819,7 +840,7 @@ def clus_funziona(cut,analysis,clustering,spike_list,n):
         final_data.append(ul)
         plt.subplot(len(unique_labels), 1, i + 1)
         plt.hist(np.diff(ul), bins=300, density=True, alpha=0.5, color='blue', edgecolor='black')
-        plt.title(f'ISI: Cluster {i} numerosity: {len(final_data[i])}')
-    plt.subplots_adjust(hspace=0.5)
+        plt.title(f'ISI: Cluster {i} numerosity: {len(final_data[i])}, firing rate: {len(final_data)*10000/len_data}')
+    plt.subplots_adjust(hspace=1.5)
     plt.show()
-    return final_data, unique_labels
+    return final_data
