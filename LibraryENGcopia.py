@@ -15,6 +15,25 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.signal import find_peaks
 import time
 
+def mask_cuts(cut):
+    before=5 #(or 50 for 5 ms : CHECK)
+    after=5
+    for i in range(cut.shape[0]):
+        spike=cut[i]
+        min_ind=np.argmin(spike)
+        max_ind=np.argmax(spike)
+        first=min(min_ind,max_ind)
+        if first>before:
+            first=first-before
+        second=max(min_ind,max_ind)
+        if second<(30-after):
+            second=second+after
+        masked_spike=np.zeros(cut.shape[1])
+        masked_spike[first:second]=spike[first:second]
+        cut[i]=masked_spike
+    print(cut.shape)
+    return cut
+
 def find_all_spikes_new(data):
     pos=[]
     neg=[]
@@ -68,13 +87,13 @@ def find_all_spikes(data):
     return pos,neg
 
 def cut(pos,neg,data):
-    pre = 0.003
-    post = 0.003
+    pre = 0.0015
+    post = 0.0015
     fs=10000
     prima = int(pre*fs)
     dopo = int(post*fs)
     lunghezza_indici = len(pos)
-    pos_cut= np.empty([lunghezza_indici+1, prima+dopo])
+    pos_cut= np.empty([lunghezza_indici, prima+dopo])
     lunghezza_neg=len(neg)
     neg_cut= np.empty([lunghezza_neg, prima+dopo])
     dim = data.shape[0]
@@ -181,7 +200,94 @@ def RMM(data):
     print('detected spikes:', len(minima), 'firing rate: ',firing_rate)
     return minima, maxima
 
+def clus(cut,analysis,clustering,spike_list,n,len_data):
+    from sklearn.cluster import KMeans
+    from sklearn.cluster import DBSCAN
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+    from sklearn.decomposition import FastICA
+    from sklearn.metrics import silhouette_score
+    from scipy.stats import kurtosis
+    import numpy as np
+    if analysis=='PCA':        
+        scale = StandardScaler()
+        estratti_norm = scale.fit_transform(cut)
+        print('Total spikes: ', estratti_norm.shape[0])
+        n_comp=10
+        pca = PCA(n_components=n_comp)
+        transformed = pca.fit_transform(estratti_norm)
+        print('transformed')
+        #transformed=cut
+    else:
+        if analysis=='ICA':
+            ica = FastICA(n_components=40)
+            ica_components = ica.fit_transform(cut)
+            kurtosis_values = kurtosis(ica_components)
+            threshold_kurtosis = 3
+            selected_components = np.where(kurtosis_values > threshold_kurtosis)[0]
+            transformed = [ica_components[:, i] for i in selected_components]
+            for i in selected_components:
+                print(f'Selected Independent Component {i + 1}: Kurtosis = {kurtosis_values[i]}')
 
+    if clustering=='kmeans':
+        num_clusters = n
+        kmeans = KMeans(n_clusters=num_clusters, random_state=42)
+        kmeans.fit(transformed)
+        labels = kmeans.labels_
+    else:
+        if clustering=='dbscan':
+            dbscan = DBSCAN(eps=1.5, min_samples=60)
+            labels = dbscan.fit_predict(transformed)
+
+
+    final_data=[]
+    unique_labels = np.unique(labels)
+    
+    if len(unique_labels) == 1:
+        print("DBSCAN assigned only one cluster.")
+    else:
+        silhouette_avg = silhouette_score(transformed, labels)
+        num_clusters = len(np.unique(labels[labels != -1]))
+        print("For", num_clusters,"clusters, the silhouette score is:", silhouette_avg)
+
+    fig = plt.figure(figsize=(8, 10))
+
+    # Iterate over unique cluster labels
+    for i, cluster_label in enumerate(unique_labels):
+        # Extract data points for the current cluster
+        cluster_data = cut[labels == cluster_label]
+        #final_data.append(spike_list[labels == cluster_label].tolist())
+
+        # Plot the individual cluster data
+        quad=int(len(unique_labels)/2)
+        plt.subplot(3, 2, i + 1)
+        plt.plot(cluster_data.transpose(), alpha=0.5)  # Use alpha for transparency
+        #print(cluster_data)
+        plt.title(f'Cluster {cluster_label}')
+        plt.xlabel('Time [ms]')
+        plt.ylabel('Signal Amplitude')
+
+        # Plot the average waveform
+        mean_wave = np.mean(cluster_data, axis=0)
+        std_wave = np.std(cluster_data, axis=0)
+        plt.plot(mean_wave, color='black', linewidth=2, label='Avg. Waveform')
+        plt.legend()
+
+    # Adjust layout to prevent overlapping
+    #plt.tight_layout()
+    plt.subplots_adjust(hspace=1.5)
+    plt.show()
+    spike_list=np.array(spike_list)
+    for i in unique_labels:
+        ul=spike_list[labels==i]
+        final_data.append(ul)
+        plt.subplot(3, 2, i + 1)
+        plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
+        plt.title(f'ISI: Cluster {i} numerosity: {len(final_data[i])}, firing rate: {len(final_data[i])*10000/len_data}')
+    plt.subplots_adjust(hspace=0.5)
+    plt.show()
+    return final_data
+#################
 
 def find_spikes(data):
     window_size = 300  # (100 samples 0.01 sec)
@@ -756,91 +862,3 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
     b, a = butter_bandpass(lowcut, highcut, fs, order=order)
     y = filtfilt(b, a, data)
     return y
-
-
-def clus(cut,analysis,clustering,spike_list,n,len_data):
-    from sklearn.cluster import KMeans
-    from sklearn.cluster import DBSCAN
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.decomposition import PCA
-    from sklearn.decomposition import FastICA
-    from sklearn.metrics import silhouette_score
-    from scipy.stats import kurtosis
-    import numpy as np
-    if analysis=='PCA':        
-        scale = StandardScaler()
-        estratti_norm = scale.fit_transform(cut)
-        print('Total spikes: ', estratti_norm.shape[0])
-        n_comp=10
-        pca = PCA(n_components=n_comp)
-        transformed = pca.fit_transform(estratti_norm)
-        print('transformed')
-        #transformed=cut
-    else:
-        if analysis=='ICA':
-            ica = FastICA(n_components=40)
-            ica_components = ica.fit_transform(cut)
-            kurtosis_values = kurtosis(ica_components)
-            threshold_kurtosis = 3
-            selected_components = np.where(kurtosis_values > threshold_kurtosis)[0]
-            transformed = [ica_components[:, i] for i in selected_components]
-            for i in selected_components:
-                print(f'Selected Independent Component {i + 1}: Kurtosis = {kurtosis_values[i]}')
-
-    if clustering=='kmeans':
-        num_clusters = n
-        kmeans = KMeans(n_clusters=num_clusters, random_state=42)
-        kmeans.fit(transformed)
-        labels = kmeans.labels_
-    else:
-        if clustering=='dbscan':
-            dbscan = DBSCAN(eps=1.5, min_samples=60)
-            labels = dbscan.fit_predict(transformed)
-
-
-    final_data=[]
-    unique_labels = np.unique(labels)
-    
-    if len(unique_labels) == 1:
-        print("DBSCAN assigned only one cluster.")
-    else:
-        silhouette_avg = silhouette_score(transformed, labels)
-        num_clusters = len(np.unique(labels[labels != -1]))
-        print("For", num_clusters,"clusters, the silhouette score is:", silhouette_avg)
-
-    fig = plt.figure(figsize=(4, 6))
-
-    # Iterate over unique cluster labels
-    for i, cluster_label in enumerate(unique_labels):
-        # Extract data points for the current cluster
-        cluster_data = cut[labels == cluster_label]
-        #final_data.append(spike_list[labels == cluster_label].tolist())
-
-        # Plot the individual cluster data
-        plt.subplot(len(unique_labels), 1, i + 1)
-        plt.plot(cluster_data.transpose(), alpha=0.5)  # Use alpha for transparency
-        #print(cluster_data)
-        plt.title(f'Cluster {cluster_label}')
-        plt.xlabel('Time [ms]')
-        plt.ylabel('Signal Amplitude')
-
-        # Plot the average waveform
-        mean_wave = np.mean(cluster_data, axis=0)
-        std_wave = np.std(cluster_data, axis=0)
-        plt.plot(mean_wave, color='black', linewidth=2, label='Avg. Waveform')
-        plt.legend()
-
-    # Adjust layout to prevent overlapping
-    #plt.tight_layout()
-    plt.subplots_adjust(hspace=1.5)
-    plt.show()
-    spike_list=np.array(spike_list)
-    for i in unique_labels:
-        ul=spike_list[labels==i]
-        final_data.append(ul)
-        plt.subplot(len(unique_labels), 1, i + 1)
-        plt.hist(np.diff(ul), bins=300, density=True, alpha=0.5, color='blue', edgecolor='black')
-        plt.title(f'ISI: Cluster {i} numerosity: {len(final_data[i])}, firing rate: {len(final_data[i])*10000/len_data}')
-    plt.subplots_adjust(hspace=0.5)
-    plt.show()
-    return final_data
