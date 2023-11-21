@@ -266,7 +266,7 @@ def clus(cut,analysis,clustering,spike_list,n,len_data):
 
         # Plot the individual cluster data
         quad = math.ceil(len(unique_labels) / 2)
-        plt.subplot(quad, quad, i + 1)
+        plt.subplot(quad+1, quad, i + 1)
         plt.plot(cluster_data.transpose(), alpha=0.5)  # Use alpha for transparency
         #print(cluster_data)
         plt.title(f'Cluster {cluster_label}')
@@ -281,13 +281,13 @@ def clus(cut,analysis,clustering,spike_list,n,len_data):
 
     # Adjust layout to prevent overlapping
     #plt.tight_layout()
-    plt.subplots_adjust(hspace=1)
+    plt.subplots_adjust(hspace=0.5)
     plt.show()
     spike_list=np.array(spike_list)
     for i in unique_labels:
         ul=spike_list[labels==i]
         final_data.append(ul)
-        plt.subplot(quad, quad, i + 1)
+        plt.subplot(quad+1, quad, i + 1)
         plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
         plt.title(f'ISI: Cluster {i} numerosity: {len(final_data[i])}, \n firing rate: {len(final_data[i])*10000/len_data}')
     plt.subplots_adjust(hspace=1)
