@@ -208,7 +208,10 @@ def clus(cut,analysis,clustering,spike_list,n,len_data):
     from sklearn.decomposition import FastICA
     from sklearn.metrics import silhouette_score
     from scipy.stats import kurtosis
+    import skfuzzy as fuzz
     import numpy as np
+    import math
+
     if analysis=='PCA':        
         scale = StandardScaler()
         estratti_norm = scale.fit_transform(cut)
@@ -234,10 +237,13 @@ def clus(cut,analysis,clustering,spike_list,n,len_data):
         kmeans = KMeans(n_clusters=num_clusters, random_state=42)
         kmeans.fit(transformed)
         labels = kmeans.labels_
-    else:
-        if clustering=='dbscan':
-            dbscan = DBSCAN(eps=1.5, min_samples=60)
-            labels = dbscan.fit_predict(transformed)
+    elif clustering=='dbscan':
+        dbscan = DBSCAN(eps=1.5, min_samples=60)
+        labels = dbscan.fit_predict(transformed)
+    elif clustering == 'fuzzy':
+        num_clusters = n
+        cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, num_clusters, 2, error=0.005, maxiter=1000, init=None)
+        labels = np.argmax(u, axis=0)
 
 
     final_data=[]
@@ -259,8 +265,8 @@ def clus(cut,analysis,clustering,spike_list,n,len_data):
         #final_data.append(spike_list[labels == cluster_label].tolist())
 
         # Plot the individual cluster data
-        quad=int(len(unique_labels)/2)
-        plt.subplot(3, 2, i + 1)
+        quad = math.ceil(len(unique_labels) / 2)
+        plt.subplot(quad, quad, i + 1)
         plt.plot(cluster_data.transpose(), alpha=0.5)  # Use alpha for transparency
         #print(cluster_data)
         plt.title(f'Cluster {cluster_label}')
@@ -275,16 +281,16 @@ def clus(cut,analysis,clustering,spike_list,n,len_data):
 
     # Adjust layout to prevent overlapping
     #plt.tight_layout()
-    plt.subplots_adjust(hspace=1.5)
+    plt.subplots_adjust(hspace=1)
     plt.show()
     spike_list=np.array(spike_list)
     for i in unique_labels:
         ul=spike_list[labels==i]
         final_data.append(ul)
-        plt.subplot(3, 2, i + 1)
+        plt.subplot(quad, quad, i + 1)
         plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
-        plt.title(f'ISI: Cluster {i} numerosity: {len(final_data[i])}, firing rate: {len(final_data[i])*10000/len_data}')
-    plt.subplots_adjust(hspace=0.5)
+        plt.title(f'ISI: Cluster {i} numerosity: {len(final_data[i])}, \n firing rate: {len(final_data[i])*10000/len_data}')
+    plt.subplots_adjust(hspace=1)
     plt.show()
     return final_data
 #################
@@ -434,174 +440,6 @@ def find_spikes_with_memory(data):
     print('detected spikes:', len(unique_minima_indices),'firing rate: ',firing_rate)
     
     return unique_minima_indices, unique_maxima_indices
-
-
-def DetectSpike(segnale, soglia, fs, dead_time = 0.003):   
- 
-    """
-    Detect spikes when the signal exceed in amplitude a certain threshold
-    It works automatically with both positive and negativa thresholds
-    
-    PARAMETERS
-    segnale = the signal in which it search for the peaks (it must be a numpy.array or a list or a tuple)
-    soglia = the chosen thresold for the channel(it has to be int, float, double, numpy.float64)
-    fs = sampling frequency (it must be an integer)
-    dead_time [optional] = time in which the function doesn't search for a maximum after detecting one
-    
-    RETURN
-    indici_spike[:k] = python list with length m, which contains all the samples of the signal when it cross the threshold
-    
-    """
-    
-    j = 0 
-    numero_campioni = 0
-    for j in segnale:
-        numero_campioni += 1
-    soglia = abs(soglia) #we consider both a positive and negative thresholds
-    indici_spike = [None] * numero_campioni
-    dead_campioni = int(dead_time*fs)
-    i = 0
-    k = 0
-    while (i<numero_campioni):
-        valore = abs(segnale[i])
-        if (valore>soglia):
-            indici_spike[k] = i
-            k += 1
-            i += dead_campioni
-        else:
-            i += 1
-    return indici_spike[:k] 
-
-
-
-def AlignSpike(segnale, indici, soglia, fs, research_time = 0.002):  
-    """
-    Align all the spikes previously detected with the function RilevaSpike
-    
-    PARAMETERS
-    segnale = the signal to search the peaks in (it must be a numpy.array, or a list or a tuple)
-    indici = the samples detected with the function RilevaSpike (they must be type integer)
-    fs = sampling frequency (it must be type integer)
-    research_timpe [optional] = time (in seconds) in which the function search for the relative maximum (default 0.002)
-    
-    RETURN
-    indici_spike[:k] = a python list of length m, which contains all the samples of the spikes aligned to the minimum or maximum (if the signal excedees both, they are aligned to the minimum)
-     
-    """
-
-    numero_campioni = len(segnale)
-    research_campioni = int(research_time*fs)
-    indici_allineati = [None] * numero_campioni
-    soglia = abs(soglia)
-
-    m=0
-    for i in indici:
-        k = 0
-        picco_negativo = False  
-        if (i + research_campioni) <= numero_campioni:
-            while (k<research_campioni):   
-                if segnale[i+k] < -soglia:
-                    picco_negativo = True
-                    indici_allineati[m] = i+k 
-                    k+=1
-                    break
-                k+=1
-            if picco_negativo == False:
-                indici_allineati[m] = i 
-                k=0 
-                while (k<research_campioni):
-                    if segnale[i+k] > segnale[indici_allineati[m]]:
-                        indici_allineati[m] = i+k
-                    k += 1     
-            else:
-                while (k<research_campioni):
-                    if segnale[i+k] < segnale[indici_allineati[m]]:
-                        indici_allineati[m] = i+k
-                    k += 1
-            m +=1    
-        else:
-            break
-    return indici_allineati[:m]
-
-
-
-def ExtractSpike(segnale, indici, fs, pre = 0.001, post = 0.002):
-    """
-    Extract the waveform of the spikes as an array
-    
-    PARAMETERS:
-    segnale: the signal as an unidimensional numpy array 
-    indice: the samples of the spikes, as a unidimensional numpy array
-    pre: length of the cutoff in seconds before the spike
-    post: length of the cutoff in seconds after the spike
-    fs: sampling frequency
-    
-    RETURNS
-    cutouts: bidimensional numpy array, with a spike in each row
-
-    """
-
-    prima = int(pre*fs)
-    dopo = int(post*fs)
-    lunghezza_indici = len(indici)
-    cutout = np.empty([lunghezza_indici, prima+dopo], np.int32)
- 
-    dim = segnale.shape[0]
-    k=0
-    for i in indici:
-        #verifico che la finestra non esca dal segnale
-        if (i-prima >= 0) and (i+dopo <= dim):
-            cutout[k] = segnale[(int(i)-prima):(int(i)+dopo)]          
-        k += 1
-    return cutout
-
-
-#____________________________________________________________________________________________PCA_________________________________________________
-
-
-def EseguiPCA(dati, n=3, show=False):
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.decomposition import PCA
-    
-    #Standardizing data
-    standardizzati = StandardScaler().fit_transform(dati)
-    print("\nSignal standardized\nMean: ", np.mean(standardizzati), "\nVariance: ", np.std(standardizzati)**2, "\n")
-
-    #3D
-    if n==3:
-        pca = PCA(n_components=3)
-        principal_components = pca.fit_transform(standardizzati)
-        principal_DataFrame = pd.DataFrame(data = principal_components, columns = ['PC1', 'PC2','PC3'])
-
-        if show == True:
-            fig = plt.figure(figsize=(15,15))
-            ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(principal_components[:,0], principal_components[:,1], principal_components[:,2], color='#000000', depthshade=True, lw=0)  
-            plt.show()
-        
-    #2D    
-    elif n==2:
-        pca = PCA(n_components=2)
-        principal_components = pca.fit_transform(standardizzati)
-        principal_DataFrame = pd.DataFrame(data = principal_components, columns = ['PC1', 'PC2'])
-
-        if show == True:
-            fig = plt.figure(figsize = (15,15))
-            ax = fig.add_subplot(1,1,1) 
-            ax.set_xlabel('Principal Component 1', fontsize = 30)
-            ax.set_ylabel('Principal Component 2', fontsize = 30)
-
-            x = principal_components[:,0]
-            y = principal_components[:,1]
-            ax.scatter(x, y, color ="#000000")
-            ax.grid()
-            plt.show()
-    
-    else:
-        raise Exception("PCA funciton only work with 2 or 3 dimensions! n=2, n=3")
-    
-    return principal_DataFrame
-
 
 #____________________________________________________________________________________________HIERARCHICAL_________________________________________________
 def funzionedscan(cutouts,transformed,cluster_labels,minima):
