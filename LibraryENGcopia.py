@@ -112,7 +112,8 @@ def cut(pos,neg,data):
             spike_std=(spike-media)/std
             media=np.mean(spike_std)
             std=np.std(spike_std)
-            if abs(std)<=2*abs(signal_std) and abs(media)<=10*abs(signal_mean):
+            #if abs(std)<=2*abs(signal_std) and abs(media)<=10*abs(signal_mean):
+            if abs(std)<=3*abs(signal_std) and abs(media)<=100*abs(signal_mean):
                 pos_cut[k,:] = spike_std
                 pos_new.append(i)
                 k += 1
