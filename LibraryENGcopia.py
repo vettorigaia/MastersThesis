@@ -10,7 +10,8 @@ import numpy as np
 import pandas as pd
 import scipy
 import pywt
-from tqdm import tqdm
+#from tqdm import tqdm
+from tqdm.notebook import tqdm
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.signal import find_peaks
 import time
@@ -59,7 +60,7 @@ def find_all_spikes(data):
         window=data[i:i+window_size]
         neg_window=-window
         mad=scipy.stats.median_abs_deviation(window)
-        thresh=4*mad
+        thresh=4.3*mad
         pos_peaks=find_peaks(window.ravel(),height=float(thresh))
         neg_peaks=find_peaks(neg_window.ravel(),height=float(thresh))
         lp=len(pos_peaks[0])
@@ -203,7 +204,7 @@ def RMM(data):
 
 def clus(cut,clustering,spike_list,n,len_data):
     from sklearn.cluster import KMeans
-    from sklearn.cluster import DBSCAN
+    from sklearn.cluster import DBSCAN, HDBSCAN
     from sklearn.preprocessing import StandardScaler
     from sklearn.decomposition import PCA
     from sklearn.metrics import silhouette_score
@@ -218,7 +219,6 @@ def clus(cut,clustering,spike_list,n,len_data):
     n_comp=10
     pca = PCA(n_components=n_comp)
     transformed = pca.fit_transform(estratti_norm)
-    print('transformed')
     #transformed=cut
     
     if clustering=='kmeans':
@@ -234,7 +234,7 @@ def clus(cut,clustering,spike_list,n,len_data):
         cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, num_clusters, 2, error=0.005, maxiter=3000, init=None)
         labels = np.argmax(u, axis=0)
     elif clustering=='hdbscan':
-        hdbscan = HDBSCAN(min_cluster_size=mcs, min_samples=min_s, leaf_size=leafsize) 
+        hdbscan = HDBSCAN(min_cluster_size=100, min_samples=5, leaf_size=30) 
         labels = hdbscan.fit_predict(transformed)
 
 
@@ -282,7 +282,8 @@ def clus(cut,clustering,spike_list,n,len_data):
         else:
             k=i
         ul=spike_list[labels==i]
-        final_data.append(ul)
+        if i != -1:
+            final_data.append(ul)
         plt.subplot(quad+1, quad, k+1)
         plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
         plt.title(f'ISI: Cluster {i} numerosity: {len(final_data[i+1])}, \n firing rate: {len(final_data[i+1])*10000/len_data}')
