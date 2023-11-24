@@ -210,9 +210,6 @@ def hdbscan_clustering(cut,spike_list,len_data):
     import numpy as np
     import math
 
-    cut=pos_cut[channel]
-    spike_list=n_pos[channel]
-
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
     print('Total spikes: ', estratti_norm.shape[0])
@@ -221,8 +218,8 @@ def hdbscan_clustering(cut,spike_list,len_data):
     transformed = pca.fit_transform(estratti_norm)
     #transformed=cut
 
-    dbscan = HDBSCAN(min_cluster_size=100, min_samples=5, leaf_size=30)
-    labels = dbscan.fit_predict(transformed)
+    hdbscan = HDBSCAN(min_cluster_size=150, min_samples=5)
+    labels = hdbscan.fit_predict(transformed)
 
 
     final_data=[]
@@ -230,7 +227,7 @@ def hdbscan_clustering(cut,spike_list,len_data):
     unique_labels = np.unique(labels)
 
     if len(unique_labels) == 1:
-        print("DBSCAN assigned only one cluster.")
+        print("HDBSCAN assigned only one cluster.")
     else:
         silhouette_avg = silhouette_score(transformed, labels)
         num_clusters = len(np.unique(labels[labels != -1]))
@@ -267,8 +264,8 @@ def hdbscan_clustering(cut,spike_list,len_data):
             final_data.append(ul)
         plt.subplot(quad, quad, i + 2)
         plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
-        plt.title(f'ISI: Cluster {i} numerosity: {len(temporary_data[i+1])}, \n firing rate: {len(temporary_data[i+1])*10000/len_data}')
-    plt.subplots_adjust(hspace=1)
+        plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i+1])}, \n firing rate: {len(temporary_data[i+1])*10000/len_data}')
+    plt.subplots_adjust(hspace=2)
     plt.show()
     return final_data
 
