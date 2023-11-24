@@ -218,7 +218,7 @@ def hdbscan_clustering(cut,spike_list,len_data):
     transformed = pca.fit_transform(estratti_norm)
     #transformed=cut
 
-    hdbscan = HDBSCAN(min_cluster_size=150, min_samples=5)
+    hdbscan = HDBSCAN(min_cluster_size=300, min_samples=5)
     labels = hdbscan.fit_predict(transformed)
 
 
