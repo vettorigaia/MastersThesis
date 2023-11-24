@@ -51,7 +51,7 @@ def find_all_spikes_new(data):
 def find_all_spikes(data):
     pos=[]
     neg=[]
-    window_size=300 #(30 ms)
+    window_size=10000 #(1000 ms)
     pbar = tqdm(total = len(data)-window_size)
     i=0
     i_bf=0
@@ -83,7 +83,7 @@ def find_all_spikes(data):
         pbar.update(delta)
 
     firing_rate=(len(pos)+len(neg))*10000/len(data)
-    print('detected spikes:', len(pos)+len(neg), 'firing rate: ',firing_rate)
+    print('positive spikes',len(pos),'negative spikes',len(neg),'detected spikes:', len(pos)+len(neg), 'firing rate: ',firing_rate)
     return pos,neg
 
 def cut(pos,neg,data):
@@ -113,7 +113,7 @@ def cut(pos,neg,data):
             media=np.mean(spike_std)
             std=np.std(spike_std)
             #if abs(std)<=2*abs(signal_std) and abs(media)<=10*abs(signal_mean):
-            if abs(std)<=3*abs(signal_std) and abs(media)<=100*abs(signal_mean):
+            if abs(std)<=3*abs(signal_std) and abs(media)<=10*abs(signal_mean):
                 pos_cut[k,:] = spike_std
                 pos_new.append(i)
                 k += 1
@@ -201,38 +201,26 @@ def RMM(data):
     print('detected spikes:', len(minima), 'firing rate: ',firing_rate)
     return minima, maxima
 
-def clus(cut,analysis,clustering,spike_list,n,len_data):
+def clus(cut,clustering,spike_list,n,len_data):
     from sklearn.cluster import KMeans
     from sklearn.cluster import DBSCAN
     from sklearn.preprocessing import StandardScaler
     from sklearn.decomposition import PCA
-    from sklearn.decomposition import FastICA
     from sklearn.metrics import silhouette_score
     from scipy.stats import kurtosis
     import skfuzzy as fuzz
     import numpy as np
     import math
-
-    if analysis=='PCA':        
-        scale = StandardScaler()
-        estratti_norm = scale.fit_transform(cut)
-        print('Total spikes: ', estratti_norm.shape[0])
-        n_comp=10
-        pca = PCA(n_components=n_comp)
-        transformed = pca.fit_transform(estratti_norm)
-        print('transformed')
-        #transformed=cut
-    else:
-        if analysis=='ICA':
-            ica = FastICA(n_components=40)
-            ica_components = ica.fit_transform(cut)
-            kurtosis_values = kurtosis(ica_components)
-            threshold_kurtosis = 3
-            selected_components = np.where(kurtosis_values > threshold_kurtosis)[0]
-            transformed = [ica_components[:, i] for i in selected_components]
-            for i in selected_components:
-                print(f'Selected Independent Component {i + 1}: Kurtosis = {kurtosis_values[i]}')
-
+    
+    scale = StandardScaler()
+    estratti_norm = scale.fit_transform(cut)
+    print('Total spikes: ', estratti_norm.shape[0])
+    n_comp=10
+    pca = PCA(n_components=n_comp)
+    transformed = pca.fit_transform(estratti_norm)
+    print('transformed')
+    #transformed=cut
+    
     if clustering=='kmeans':
         num_clusters = n
         kmeans = KMeans(n_clusters=num_clusters, random_state=42)
@@ -243,8 +231,11 @@ def clus(cut,analysis,clustering,spike_list,n,len_data):
         labels = dbscan.fit_predict(transformed)
     elif clustering == 'fuzzy':
         num_clusters = n
-        cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, num_clusters, 2, error=0.005, maxiter=1000, init=None)
+        cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, num_clusters, 2, error=0.005, maxiter=3000, init=None)
         labels = np.argmax(u, axis=0)
+    elif clustering=='hdbscan':
+        hdbscan = HDBSCAN(min_cluster_size=mcs, min_samples=min_s, leaf_size=leafsize) 
+        labels = hdbscan.fit_predict(transformed)
 
 
     final_data=[]
@@ -286,11 +277,16 @@ def clus(cut,analysis,clustering,spike_list,n,len_data):
     plt.show()
     spike_list=np.array(spike_list)
     for i in unique_labels:
+        if clustering=='dbscan' or 'hdbscan':
+            k=i+1
+        else:
+            k=i
         ul=spike_list[labels==i]
         final_data.append(ul)
-        plt.subplot(quad+1, quad, i + 1)
+        plt.subplot(quad+1, quad, k+1)
         plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
-        plt.title(f'ISI: Cluster {i} numerosity: {len(final_data[i])}, \n firing rate: {len(final_data[i])*10000/len_data}')
+        plt.title(f'ISI: Cluster {i} numerosity: {len(final_data[i+1])}, \n firing rate: {len(final_data[i+1])*10000/len_data}')
+        k+=1
     plt.subplots_adjust(hspace=1)
     plt.show()
     return final_data
