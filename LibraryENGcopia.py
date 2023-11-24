@@ -202,6 +202,76 @@ def RMM(data):
     print('detected spikes:', len(minima), 'firing rate: ',firing_rate)
     return minima, maxima
 
+def hdbscan_clustering(cut,spike_list,len_data):
+    from sklearn.cluster import HDBSCAN
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+    from sklearn.metrics import silhouette_score
+    import numpy as np
+    import math
+
+    cut=pos_cut[channel]
+    spike_list=n_pos[channel]
+
+    scale = StandardScaler()
+    estratti_norm = scale.fit_transform(cut)
+    print('Total spikes: ', estratti_norm.shape[0])
+    n_comp=10
+    pca = PCA(n_components=n_comp)
+    transformed = pca.fit_transform(estratti_norm)
+    #transformed=cut
+
+    dbscan = HDBSCAN(min_cluster_size=100, min_samples=5, leaf_size=30)
+    labels = dbscan.fit_predict(transformed)
+
+
+    final_data=[]
+    temporary_data=[]
+    unique_labels = np.unique(labels)
+
+    if len(unique_labels) == 1:
+        print("DBSCAN assigned only one cluster.")
+    else:
+        silhouette_avg = silhouette_score(transformed, labels)
+        num_clusters = len(np.unique(labels[labels != -1]))
+        print("For", num_clusters,"clusters, the silhouette score is:", silhouette_avg)
+
+    fig = plt.figure(figsize=(4, 5))
+
+    # Iterate over unique cluster labels
+    for i, cluster_label in enumerate(unique_labels):
+        # Extract data points for the current cluster
+        cluster_data = cut[labels == cluster_label]
+
+        # Plot the individual cluster data
+        quad = math.ceil(len(unique_labels)/2)
+        plt.subplot(quad, quad, i + 1)
+        plt.plot(cluster_data.transpose(), alpha=0.5)
+        plt.title(f'Cluster {cluster_label} index {i}')
+        plt.xlabel('Time [ms]')
+        plt.ylabel('Signal Amplitude')
+
+        # Plot the average waveform
+        mean_wave = np.mean(cluster_data, axis=0)
+        std_wave = np.std(cluster_data, axis=0)
+        plt.plot(mean_wave, color='black', linewidth=2, label='Avg. Waveform')
+        plt.legend()
+
+    plt.subplots_adjust(hspace=0.5)
+    plt.show()
+    spike_list=np.array(spike_list)
+    for i in unique_labels:
+        ul=spike_list[labels==i]
+        temporary_data.append(ul)
+        if i !=-1:
+            final_data.append(ul)
+        plt.subplot(quad, quad, i + 2)
+        plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
+        plt.title(f'ISI: Cluster {i} numerosity: {len(temporary_data[i+1])}, \n firing rate: {len(temporary_data[i+1])*10000/len_data}')
+    plt.subplots_adjust(hspace=1)
+    plt.show()
+    return final_data
+
 def clus(cut,clustering,spike_list,n,len_data):
     from sklearn.cluster import KMeans
     from sklearn.cluster import DBSCAN, HDBSCAN
