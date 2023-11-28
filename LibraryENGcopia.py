@@ -82,6 +82,7 @@ def find_all_spikes(data):
             i=i+max(mp,mn)+10
         delta=i-i_bf
         pbar.update(delta)
+    pbar.refresh()
 
     firing_rate=(len(pos)+len(neg))*10000/len(data)
     print('positive spikes',len(pos),'negative spikes',len(neg),'detected spikes:', len(pos)+len(neg), 'firing rate: ',firing_rate)
@@ -218,7 +219,7 @@ def hdbscan_clustering(cut,spike_list,len_data):
     transformed = pca.fit_transform(estratti_norm)
     #transformed=cut
 
-    hdbscan = HDBSCAN(min_cluster_size=300, min_samples=5)
+    hdbscan = HDBSCAN(min_cluster_size=100, min_samples=5)
     labels = hdbscan.fit_predict(transformed)
 
 
@@ -306,6 +307,7 @@ def clus(cut,clustering,spike_list,n,len_data):
 
 
     final_data=[]
+    temporary_data=[]
     unique_labels = np.unique(labels)
     
     if len(unique_labels) == 1:
@@ -324,8 +326,8 @@ def clus(cut,clustering,spike_list,n,len_data):
         #final_data.append(spike_list[labels == cluster_label].tolist())
 
         # Plot the individual cluster data
-        quad = math.ceil(len(unique_labels) / 2)
-        plt.subplot(quad+1, quad, i + 1)
+        quad = math.ceil(len(unique_labels)/2)
+        plt.subplot(quad, quad, i + 1)
         plt.plot(cluster_data.transpose(), alpha=0.5)  # Use alpha for transparency
         #print(cluster_data)
         plt.title(f'Cluster {cluster_label}')
@@ -349,11 +351,12 @@ def clus(cut,clustering,spike_list,n,len_data):
         else:
             k=i
         ul=spike_list[labels==i]
+        temporary_data.append(ul)
         if i != -1:
             final_data.append(ul)
-        plt.subplot(quad+1, quad, k+1)
+        plt.subplot(quad, quad, i + 2)
         plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
-        plt.title(f'ISI: Cluster {i} numerosity: {len(final_data[i+1])}, \n firing rate: {len(final_data[i+1])*10000/len_data}')
+        plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i+1])}, \n firing rate: {len(temporary_data[i+1])*10000/len_data}')
         k+=1
     plt.subplots_adjust(hspace=1)
     plt.show()
