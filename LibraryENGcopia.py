@@ -1,4 +1,11 @@
 #SORTING Ver2
+from tqdm.notebook import tqdm
+import sklearn.preprocessing as ps
+from sklearn.preprocessing import StandardScaler
+from random import randint
+from fastdtw import fastdtw
+import copy
+import pymc as pm
 from gettext import find
 import sys, importlib
 from  McsPy.McsData import RawData
