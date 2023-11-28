@@ -317,7 +317,7 @@ def clus(cut,clustering,spike_list,n,len_data):
         dbscan = DBSCAN(eps=1.5, min_samples=60)
         labels = dbscan.fit_predict(transformed)
     elif clustering == 'fuzzy':
-        for n in range (1,8):
+        for n in range (1,7):
             cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, n, 2, error=0.005, maxiter=3000, init=None)
             labels = np.argmax(u, axis=0)
             if (n !=1):
