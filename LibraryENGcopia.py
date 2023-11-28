@@ -289,7 +289,9 @@ def clus(cut,clustering,spike_list,n,len_data):
     pca = PCA(n_components=n_comp)
     transformed = pca.fit_transform(estratti_norm)
     #transformed=cut
+    best_score=[]
     list_score=[]
+    DB_score=[]
     if clustering=='kmeans':
         for n in range (1,6):
             model = KMeans(n_clusters=n, init='k-means++', n_init=10, max_iter=400, tol=0.00005, precompute_distances='auto', verbose=0, random_state=None, copy_x=True, n_jobs=-1, algorithm='auto')
@@ -302,7 +304,7 @@ def clus(cut,clustering,spike_list,n,len_data):
                 list_score.append(silhouette_avg)
         top_clusters = list_score.index(max(list_score))+2
         num_clusters=top_clusters
-        print("\n\n\033[1;31;47mBest cluster in the range 2 to 6: ",top_clusters,", with a silhouette score of: ",max(list_score), "\u001b[0m  \n\n")
+        print("\n\n\033[1;31;47mBest cluster in the range 2 to 7: ",top_clusters,", with a silhouette score of: ",max(list_score), "\u001b[0m  \n\n")
   
         model = KMeans(n_clusters=top_clusters, init='k-means++', n_init=10, max_iter=400, tol=0.00005, precompute_distances='auto', verbose=0, random_state=None, copy_x=True, n_jobs=None, algorithm='auto')
         labels = model.fit_predict(transformed)
@@ -315,21 +317,26 @@ def clus(cut,clustering,spike_list,n,len_data):
         dbscan = DBSCAN(eps=1.5, min_samples=60)
         labels = dbscan.fit_predict(transformed)
     elif clustering == 'fuzzy':
-        for n in range (1,13):
+        for n in range (1,8):
             cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, n, 2, error=0.005, maxiter=3000, init=None)
             labels = np.argmax(u, axis=0)
-            if (n > 2):
+            if (n !=1):
                 silhouette_avg = silhouette_score(transformed, labels)
                 CH=metrics.calinski_harabasz_score(transformed, labels)
                 DB=metrics.davies_bouldin_score(transformed, labels)
                 print('\n______________________________________________________________________________________________________________')
-                print("For", n,"clusters, the silhouette score is:", silhouette_avg, 'CH score',CH,'DB score',DB)
+                print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"), 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
                 print('\n')
                 list_score.append(silhouette_avg)
+                DB_score.append(DB)
+                best_score.append(silhouette_avg-DB)
         
-        top_clusters = list_score.index(max(list_score))+2
+        #top_clusters = list_score.index(max(list_score))+2
+        #top_clusters = DB_score.index(min(DB_score))+2
+        top_clusters = best_score.index(max(best_score))+2
+        #creare vettore con (silhouette - DB) e selezionare massimo
         num_clusters=top_clusters
-        print("\n\n\033[1;31;47mBest cluster in the range 2 to 6: ",top_clusters,", with a silhouette score of: ",max(list_score), "\u001b[0m  \n\n")
+        print("\n\n\033[1;31;47mBest cluster in the range 2 to 6: ",top_clusters,", with a silhouette score of: ",list_score[top_clusters-2],'DB:',DB_score[top_clusters-2], "\u001b[0m  \n\n")
         cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, top_clusters, 2, error=0.005, maxiter=3000, init=None)
         labels = np.argmax(u, axis=0)
         #num_clusters = n
@@ -348,7 +355,7 @@ def clus(cut,clustering,spike_list,n,len_data):
     else:
         silhouette_avg = silhouette_score(transformed, labels)
         num_clusters = len(np.unique(labels[labels != -1]))
-        print("For", num_clusters,"clusters, the silhouette score is:", silhouette_avg)
+        print("For", num_clusters,"clusters, the silhouette score is:", list_score[top_clusters-2])
 
     fig = plt.figure(figsize=(8, 10))
 
@@ -359,8 +366,13 @@ def clus(cut,clustering,spike_list,n,len_data):
         #final_data.append(spike_list[labels == cluster_label].tolist())
 
         # Plot the individual cluster data
-        quad = math.ceil(len(unique_labels))
-        plt.subplot(quad, 1, i + 1)
+        if len(unique_labels)<=2:
+            size1=len(unique_labels)
+            size2=1
+        else:
+            size1 = math.ceil(len(unique_labels)/2)
+            size2=size1
+        plt.subplot(size1,size2, i + 1)
         plt.plot(cluster_data.transpose(), alpha=0.5)  # Use alpha for transparency
         #print(cluster_data)
         plt.title(f'Cluster {cluster_label}')
@@ -385,13 +397,14 @@ def clus(cut,clustering,spike_list,n,len_data):
             k=i
         ul=spike_list[labels==i]
         temporary_data.append(ul)
-        if i != -1:
+        fr=len(temporary_data[i])*10000/len_data
+        if i != -1 and fr>2:
             final_data.append(ul)
-        plt.subplot(quad, 1, i + 1)
+        plt.subplot(size1, size2, i + 1)
         plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
-        plt.title(f'ISI: Cluster {i} \n numerosity: {len(final_data[i])}, \n firing rate: {len(final_data[i])*10000/len_data}')
+        plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i])}, \n firing rate: {len(temporary_data[i])*10000/len_data}')
         k+=1
-    plt.subplots_adjust(hspace=1)
+    plt.subplots_adjust(hspace=2)
     plt.show()
     return final_data
 #################
