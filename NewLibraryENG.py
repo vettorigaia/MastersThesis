@@ -242,9 +242,9 @@ def clus(cut,clustering,spike_list,data):
                 best_score.append(silhouette_avg-DB)
                 del(model)
                 del(labels)
-        top_clusters = best_score.index(max(best_score))+2
+        top_clusters = (best_score.index(max(best_score)))+2
         num_clusters=top_clusters
-        print("\n\n\033[1;31;47mBest cluster in the range 2 to ", n_tries-1, ": ",top_clusters,", with a silhouette score of: ",max(list_score), "\u001b[0m  \n\n")
+        print("\n\n\033[1;31;47mBest cluster in the range 2 to ", n_tries-1, ": ",top_clusters,", with a silhouette score of: ",list_score[top_clusters-2], "\u001b[0m  \n\n")
   
         model = KMeans(n_clusters=top_clusters, n_init='auto', copy_x=True, algorithm='lloyd')
         labels = model.fit_predict(transformed)
@@ -275,7 +275,7 @@ def clus(cut,clustering,spike_list,data):
         
         #top_clusters = list_score.index(max(list_score))+2
         #top_clusters = DB_score.index(min(DB_score))+2
-        top_clusters = best_score.index(max(best_score))+2
+        top_clusters = (best_score.index(max(best_score)))+2
         #creare vettore con (silhouette - DB) e selezionare massimo
         num_clusters=top_clusters
         print("\n\n\033[1;31;47mBest cluster in the range 2 to ", n_tries-1, ":" ,top_clusters,", with a silhouette score of: ",list_score[top_clusters-2],'DB:',DB_score[top_clusters-2], "\u001b[0m  \n\n")
@@ -298,7 +298,7 @@ def clus(cut,clustering,spike_list,data):
     else:
         silhouette_avg = silhouette_score(transformed, labels)
         num_clusters = len(np.unique(labels[labels != -1]))
-        print("For", num_clusters,"clusters, the silhouette score is:", list_score[top_clusters-2])
+        print("For", top_clusters,"clusters, the silhouette score is:", list_score[top_clusters-2])
 
     fig = plt.figure(figsize=(8, 10))
 
@@ -326,7 +326,7 @@ def clus(cut,clustering,spike_list,data):
         mean_wave = np.mean(cluster_data, axis=0)
         std_wave = np.std(cluster_data, axis=0)
         plt.plot(mean_wave, color='black', linewidth=2, label='Avg. Waveform')
-        plt.legend()
+        plt.legend(loc='bottom right')
 
     # Adjust layout to prevent overlapping
     #plt.tight_layout()
