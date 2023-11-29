@@ -203,7 +203,7 @@ def hdbscan_clustering(cut,spike_list,len_data):
     plt.show()
     return final_data
 
-def clus(cut,clustering,spike_list,n,len_data):
+def clus(cut,clustering,spike_list,data):
     from sklearn.cluster import KMeans
     from sklearn.cluster import DBSCAN, HDBSCAN
     from sklearn.preprocessing import StandardScaler
@@ -214,7 +214,8 @@ def clus(cut,clustering,spike_list,n,len_data):
     import skfuzzy as fuzz
     import numpy as np
     import math
-    
+    n_tries=6
+    len_data=len(data)
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
     print('Total spikes: ', estratti_norm.shape[0])
@@ -222,24 +223,30 @@ def clus(cut,clustering,spike_list,n,len_data):
     pca = PCA(n_components=n_comp)
     transformed = pca.fit_transform(estratti_norm)
     #transformed=cut
-    best_score=[]
     list_score=[]
     DB_score=[]
+    best_score=[]
     if clustering=='kmeans':
-        for n in range (1,6):
-            model = KMeans(n_clusters=n, init='k-means++', n_init=10, max_iter=400, tol=0.00005, precompute_distances='auto', verbose=0, random_state=None, copy_x=True, n_jobs=-1, algorithm='auto')
+        for n in range (1,n_tries):
+            model = KMeans(n_clusters=n, n_init='auto', copy_x=True, algorithm='lloyd')
             labels = model.fit_predict(transformed)
             if (n != 1):
                 silhouette_avg = silhouette_score(transformed, labels)
+                CH=metrics.calinski_harabasz_score(transformed, labels)
+                DB=metrics.davies_bouldin_score(transformed, labels)
                 print('\n______________________________________________________________________________________________________________')
-                print("For", n,"clusters, the silhouette score is:", silhouette_avg)
+                print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"), 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
                 print('\n')
                 list_score.append(silhouette_avg)
-        top_clusters = list_score.index(max(list_score))+2
+                DB_score.append(DB)
+                best_score.append(silhouette_avg-DB)
+                del(model)
+                del(labels)
+        top_clusters = best_score.index(max(best_score))+2
         num_clusters=top_clusters
-        print("\n\n\033[1;31;47mBest cluster in the range 2 to 7: ",top_clusters,", with a silhouette score of: ",max(list_score), "\u001b[0m  \n\n")
+        print("\n\n\033[1;31;47mBest cluster in the range 2 to ", n_tries-1, ": ",top_clusters,", with a silhouette score of: ",max(list_score), "\u001b[0m  \n\n")
   
-        model = KMeans(n_clusters=top_clusters, init='k-means++', n_init=10, max_iter=400, tol=0.00005, precompute_distances='auto', verbose=0, random_state=None, copy_x=True, n_jobs=None, algorithm='auto')
+        model = KMeans(n_clusters=top_clusters, n_init='auto', copy_x=True, algorithm='lloyd')
         labels = model.fit_predict(transformed)
 
         #num_clusters = n
@@ -250,7 +257,7 @@ def clus(cut,clustering,spike_list,n,len_data):
         dbscan = DBSCAN(eps=1.5, min_samples=60)
         labels = dbscan.fit_predict(transformed)
     elif clustering == 'fuzzy':
-        for n in range (1,7):
+        for n in range (1,n_tries):
             cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, n, 2, error=0.005, maxiter=3000, init=None)
             labels = np.argmax(u, axis=0)
             if (n !=1):
@@ -263,13 +270,15 @@ def clus(cut,clustering,spike_list,n,len_data):
                 list_score.append(silhouette_avg)
                 DB_score.append(DB)
                 best_score.append(silhouette_avg-DB)
+                del(u)
+                del(labels)
         
         #top_clusters = list_score.index(max(list_score))+2
         #top_clusters = DB_score.index(min(DB_score))+2
         top_clusters = best_score.index(max(best_score))+2
         #creare vettore con (silhouette - DB) e selezionare massimo
         num_clusters=top_clusters
-        print("\n\n\033[1;31;47mBest cluster in the range 2 to 6: ",top_clusters,", with a silhouette score of: ",list_score[top_clusters-2],'DB:',DB_score[top_clusters-2], "\u001b[0m  \n\n")
+        print("\n\n\033[1;31;47mBest cluster in the range 2 to ", n_tries-1, ":" ,top_clusters,", with a silhouette score of: ",list_score[top_clusters-2],'DB:',DB_score[top_clusters-2], "\u001b[0m  \n\n")
         cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, top_clusters, 2, error=0.005, maxiter=3000, init=None)
         labels = np.argmax(u, axis=0)
         #num_clusters = n
@@ -309,7 +318,7 @@ def clus(cut,clustering,spike_list,n,len_data):
         plt.subplot(size1,size2, i + 1)
         plt.plot(cluster_data.transpose(), alpha=0.5)  # Use alpha for transparency
         #print(cluster_data)
-        plt.title(f'Cluster {cluster_label}')
+        plt.title(f'Cluster {cluster_label} \n numerosity: {len(cluster_data)}')
         plt.xlabel('Time [ms]')
         plt.ylabel('Signal Amplitude')
 
@@ -324,7 +333,7 @@ def clus(cut,clustering,spike_list,n,len_data):
     plt.subplots_adjust(hspace=0.5)
     plt.show()
     spike_list=np.array(spike_list)
-    for i in unique_labels:
+    for i in range(0,len(unique_labels)):
         print(i)
         #if clustering=='dbscan' or 'hdbscan':
         #    k=i+1
@@ -341,6 +350,7 @@ def clus(cut,clustering,spike_list,n,len_data):
         #k+=1
     plt.subplots_adjust(hspace=2)
     plt.show()
+    del(unique_labels)
     return final_data
 #################
 
