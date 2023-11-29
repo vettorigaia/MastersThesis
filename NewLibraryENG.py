@@ -282,6 +282,7 @@ def clus(cut,clustering,spike_list,n,len_data):
     final_data=[]
     temporary_data=[]
     unique_labels = np.unique(labels)
+    print(unique_labels)
     
     if len(unique_labels) == 1:
         print("DBSCAN assigned only one cluster.")
@@ -324,10 +325,11 @@ def clus(cut,clustering,spike_list,n,len_data):
     plt.show()
     spike_list=np.array(spike_list)
     for i in unique_labels:
-        if clustering=='dbscan' or 'hdbscan':
-            k=i+1
-        else:
-            k=i
+        print(i)
+        #if clustering=='dbscan' or 'hdbscan':
+        #    k=i+1
+        #else:
+        #    k=i
         ul=spike_list[labels==i]
         temporary_data.append(ul)
         fr=len(temporary_data[i])*10000/len_data
@@ -335,8 +337,8 @@ def clus(cut,clustering,spike_list,n,len_data):
             final_data.append(ul)
         plt.subplot(size1, size2, i + 1)
         plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
-        plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i])}, \n firing rate: {len(temporary_data[i])*10000/len_data}')
-        k+=1
+        plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i])}, \n firing rate: {format(len(temporary_data[i])*10000/len_data, ".3f")}')
+        #k+=1
     plt.subplots_adjust(hspace=2)
     plt.show()
     return final_data
