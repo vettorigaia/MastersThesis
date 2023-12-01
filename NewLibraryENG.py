@@ -39,7 +39,7 @@ def mask_cuts(cut):
         masked_spike=np.zeros(cut.shape[1])
         masked_spike[first:second]=spike[first:second]
         cut[i]=masked_spike
-    print(cut.shape)
+    #print(cut.shape)
     return cut
 
 def find_all_spikes(data):
@@ -132,7 +132,7 @@ def cut(pos,neg,data):
                 k  += 1
     negsize=k
     neg_cut=neg_cut[0:negsize]
-    print(np.isnan(pos_cut).sum(),len(pos_cut),len(pos_new),np.isnan(neg_cut).sum(),len(neg_cut),len(neg_new))
+    #print(np.isnan(pos_cut).sum(),len(pos_cut),len(pos_new),np.isnan(neg_cut).sum(),len(neg_cut),len(neg_new))
     return pos_cut,pos_new,neg_cut,neg_new
 
 
@@ -214,7 +214,7 @@ def clus(cut,clustering,spike_list,data):
     import skfuzzy as fuzz
     import numpy as np
     import math
-    n_tries=6
+    n_tries=15
     len_data=len(data)
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
@@ -222,7 +222,7 @@ def clus(cut,clustering,spike_list,data):
     n_comp=10
     pca = PCA(n_components=n_comp)
     transformed = pca.fit_transform(estratti_norm)
-    #transformed=cut
+
     list_score=[]
     DB_score=[]
     best_score=[]
@@ -247,13 +247,6 @@ def clus(cut,clustering,spike_list,data):
         model = KMeans(n_clusters=top_clusters, n_init='auto', copy_x=True, algorithm='lloyd')
         labels = model.fit_predict(transformed)
 
-        #num_clusters = n
-        #kmeans = KMeans(n_clusters=num_clusters, random_state=42)
-        #kmeans.fit(transformed)
-        #labels = kmeans.labels_
-    elif clustering=='dbscan':
-        dbscan = DBSCAN(eps=1.5, min_samples=60)
-        labels = dbscan.fit_predict(transformed)
     elif clustering == 'fuzzy':
         for n in range (1,n_tries):
             cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, n, 2, error=0.005, maxiter=3000, init=None)
@@ -269,26 +262,17 @@ def clus(cut,clustering,spike_list,data):
                 del(u)
                 del(labels)
         
-        #top_clusters = list_score.index(max(list_score))+2
-        #top_clusters = DB_score.index(min(DB_score))+2
         top_clusters = (best_score.index(max(best_score)))+2
         #creare vettore con (silhouette - DB) e selezionare massimo
         num_clusters=top_clusters
         print("\n\n\033[1;31;47mBest cluster in the range 2 to ", n_tries-1, ":" ,top_clusters,", with a silhouette score of: ",list_score[top_clusters-2],'DB:',DB_score[top_clusters-2], "\u001b[0m  \n\n")
         cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, top_clusters, 2, error=0.005, maxiter=3000, init=None)
         labels = np.argmax(u, axis=0)
-        #num_clusters = n
-        #cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, num_clusters, 2, error=0.005, maxiter=3000, init=None)
-        #labels = np.argmax(u, axis=0)
-    elif clustering=='hdbscan':
-        hdbscan = HDBSCAN(min_cluster_size=100, min_samples=5, leaf_size=30) 
-        labels = hdbscan.fit_predict(transformed)
-
+    
     final_data=[]
     temporary_data=[]
     unique_labels = np.unique(labels)
     firings=np.zeros(len(unique_labels))
-    print(unique_labels)
     
     if len(unique_labels) == 1:
         print("DBSCAN assigned only one cluster.")
@@ -303,16 +287,21 @@ def clus(cut,clustering,spike_list,data):
     for i, cluster_label in enumerate(unique_labels):
         # Extract data points for the current cluster
         cluster_data = cut[labels == cluster_label]
-        firings[i]=len(cluster_data)/len_data
-        #final_data.append(spike_list[labels == cluster_label].tolist())
-
+        firings[i]=len(cluster_data)*10000/len_data
+        
         # Plot the individual cluster data
         if len(unique_labels)<=2:
             size1=len(unique_labels)
             size2=1
-        else:
+        elif len(unique_labels)<=5:
             size1 = math.ceil(len(unique_labels)/2)
             size2=size1
+        elif len(unique_labels)<=8:
+            size1 = 3
+            size2=math.ceil(len(unique_labels)/size1)
+        else:
+            size1=6
+            size2=math.ceil(len(unique_labels)/size1)
         plt.subplot(size1,size2, i + 1)
         plt.plot(cluster_data.transpose(), alpha=0.5)  # Use alpha for transparency
         #print(cluster_data)
@@ -323,23 +312,18 @@ def clus(cut,clustering,spike_list,data):
         # Plot the average waveform
         mean_wave = np.mean(cluster_data, axis=0)
         std_wave = np.std(cluster_data, axis=0)
-        plt.plot(mean_wave, color='black', linewidth=2, label='Avg. Waveform')
+        #plt.plot(mean_wave, color='black', linewidth=2, label='Avg. Waveform')
+        plt.errorbar(range(mean_wave.shape[0]), mean_wave, yerr=std_wave, color='black', linewidth=2, label='Avg. Waveform')
         plt.legend(loc='lower right')
 
     mean_firing=np.mean(firings)
     std_firing=np.std(firings)
-    firing_threshold=mean_firing-2*std_firing
-    # Adjust layout to prevent overlapping
-    #plt.tight_layout()
+    firing_threshold=mean_firing-std_firing
+    print(firings,'thr: ',firing_threshold,'m: ',mean_firing,'std: ',std_firing)
     plt.subplots_adjust(hspace=0.5)
     plt.show()
     spike_list=np.array(spike_list)
     for i in range(0,len(unique_labels)):
-        print(i)
-        #if clustering=='dbscan' or 'hdbscan':
-        #    k=i+1
-        #else:
-        #    k=i
         ul=spike_list[labels==i]
         temporary_data.append(ul)
         fr=len(temporary_data[i])*10000/len_data
@@ -349,7 +333,6 @@ def clus(cut,clustering,spike_list,data):
         plt.subplot(size1, size2, i + 1)
         plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
         plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i])}, \n firing rate: {format(len(temporary_data[i])*10000/len_data, ".3f")}')
-        #k+=1
     plt.subplots_adjust(hspace=2)
     plt.show()
     del(unique_labels)
