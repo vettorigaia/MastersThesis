@@ -274,14 +274,7 @@ def clus(cut,clustering,spike_list,data):
     unique_labels = np.unique(labels)
     firings=np.zeros(len(unique_labels))
     
-    if len(unique_labels) == 1:
-        print("DBSCAN assigned only one cluster.")
-    else:
-        silhouette_avg = silhouette_score(transformed, labels)
-        num_clusters = len(np.unique(labels[labels != -1]))
-        print("For", top_clusters,"clusters, the silhouette score is:", list_score[top_clusters-2])
-
-    fig = plt.figure(figsize=(8, 10))
+    fig = plt.figure(figsize=(10, 12))
 
     # Iterate over unique cluster labels
     for i, cluster_label in enumerate(unique_labels):
@@ -312,14 +305,14 @@ def clus(cut,clustering,spike_list,data):
         # Plot the average waveform
         mean_wave = np.mean(cluster_data, axis=0)
         std_wave = np.std(cluster_data, axis=0)
-        #plt.plot(mean_wave, color='black', linewidth=2, label='Avg. Waveform')
         plt.errorbar(range(mean_wave.shape[0]), mean_wave, yerr=std_wave, color='black', linewidth=2, label='Avg. Waveform')
         plt.legend(loc='lower right')
+    plt.tight_layout()
 
     mean_firing=np.mean(firings)
     std_firing=np.std(firings)
     firing_threshold=mean_firing-std_firing
-    print(firings,'thr: ',firing_threshold,'m: ',mean_firing,'std: ',std_firing)
+    print('firing rate threshold: ',firing_threshold)
     plt.subplots_adjust(hspace=0.5)
     plt.show()
     spike_list=np.array(spike_list)
@@ -327,13 +320,12 @@ def clus(cut,clustering,spike_list,data):
         ul=spike_list[labels==i]
         temporary_data.append(ul)
         fr=len(temporary_data[i])*10000/len_data
-        print(fr, firing_threshold)
         if i != -1 and fr>firing_threshold:
             final_data.append(ul)
         plt.subplot(size1, size2, i + 1)
         plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
         plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i])}, \n firing rate: {format(len(temporary_data[i])*10000/len_data, ".3f")}')
-    plt.subplots_adjust(hspace=2)
+    plt.subplots_adjust(hspace=2.5)
     plt.show()
     del(unique_labels)
     return final_data
