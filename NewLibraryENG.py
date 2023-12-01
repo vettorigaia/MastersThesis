@@ -322,7 +322,7 @@ def clus(cut,clustering,spike_list,data):
         mean_wave = np.mean(cluster_data, axis=0)
         std_wave = np.std(cluster_data, axis=0)
         plt.plot(mean_wave, color='black', linewidth=2, label='Avg. Waveform')
-        plt.legend(loc='bottom right')
+        plt.legend(loc='lower right')
 
     # Adjust layout to prevent overlapping
     #plt.tight_layout()
