@@ -287,6 +287,7 @@ def clus(cut,clustering,spike_list,data):
     final_data=[]
     temporary_data=[]
     unique_labels = np.unique(labels)
+    firings=np.zeros(len(unique_labels))
     print(unique_labels)
     
     if len(unique_labels) == 1:
@@ -302,6 +303,7 @@ def clus(cut,clustering,spike_list,data):
     for i, cluster_label in enumerate(unique_labels):
         # Extract data points for the current cluster
         cluster_data = cut[labels == cluster_label]
+        firings[i]=len(cluster_data)/len_data
         #final_data.append(spike_list[labels == cluster_label].tolist())
 
         # Plot the individual cluster data
@@ -324,6 +326,9 @@ def clus(cut,clustering,spike_list,data):
         plt.plot(mean_wave, color='black', linewidth=2, label='Avg. Waveform')
         plt.legend(loc='lower right')
 
+    mean_firing=np.mean(firings)
+    std_firing=np.std(firings)
+    firing_threshold=mean_firing-2*std_firing
     # Adjust layout to prevent overlapping
     #plt.tight_layout()
     plt.subplots_adjust(hspace=0.5)
@@ -338,7 +343,8 @@ def clus(cut,clustering,spike_list,data):
         ul=spike_list[labels==i]
         temporary_data.append(ul)
         fr=len(temporary_data[i])*10000/len_data
-        if i != -1 and fr>2:
+        print(fr, firing_threshold)
+        if i != -1 and fr>firing_threshold:
             final_data.append(ul)
         plt.subplot(size1, size2, i + 1)
         plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
