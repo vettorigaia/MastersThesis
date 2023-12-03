@@ -223,6 +223,7 @@ def clus(cut,clustering,spike_list,data):
     pca = PCA(n_components=n_comp)
     transformed = pca.fit_transform(estratti_norm)
 
+    info=[]
     list_score=[]
     DB_score=[]
     best_score=[]
@@ -258,7 +259,7 @@ def clus(cut,clustering,spike_list,data):
                 print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"), 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
                 list_score.append(silhouette_avg)
                 DB_score.append(DB)
-                best_score.append(silhouette_avg-DB)
+                best_score.append(2*silhouette_avg-DB)
                 del(u)
                 del(labels)
         
@@ -304,6 +305,8 @@ def clus(cut,clustering,spike_list,data):
 
         # Plot the average waveform
         mean_wave = np.mean(cluster_data, axis=0)
+        info.append(f'mean clus{cluster_label}')
+        info.append(mean_wave)
         std_wave = np.std(cluster_data, axis=0)
         plt.errorbar(range(mean_wave.shape[0]), mean_wave, yerr=std_wave, color='black', linewidth=2, label='Avg. Waveform')
         plt.legend(loc='lower right')
@@ -313,6 +316,10 @@ def clus(cut,clustering,spike_list,data):
     std_firing=np.std(firings)
     firing_threshold=mean_firing-std_firing
     print('firing rate threshold: ',firing_threshold)
+    info.append('firing threshold')
+    info.append(firing_threshold)
+    info.append('mean firing')
+    info.append(mean_firing)
     plt.subplots_adjust(hspace=0.5)
     plt.show()
     spike_list=np.array(spike_list)
@@ -328,9 +335,177 @@ def clus(cut,clustering,spike_list,data):
     plt.subplots_adjust(hspace=2.5)
     plt.show()
     del(unique_labels)
-    return final_data
+    return final_data, info
 #################
+def NEWclus(cut,clustering,spike_list,data):
+    from sklearn.cluster import KMeans
+    from sklearn.cluster import DBSCAN, HDBSCAN
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+    from sklearn import metrics
+    from sklearn.metrics import silhouette_score
+    from scipy.stats import kurtosis
+    import skfuzzy as fuzz
+    import numpy as np
+    import math
+    n_tries=15
+    len_data=len(data)
+    scale = StandardScaler()
+    estratti_norm = scale.fit_transform(cut)
+    print('Total spikes: ', estratti_norm.shape[0])
+    n_comp=10
+    pca = PCA(n_components=n_comp)
+    transformed = pca.fit_transform(estratti_norm)
 
+    info=[]
+    list_score=[]
+    DB_score=[]
+    best_score=[]
+    if clustering=='kmeans':
+        for n in range (1,n_tries):
+            model = KMeans(n_clusters=n, n_init='auto', copy_x=True, algorithm='lloyd')
+            labels = model.fit_predict(transformed)
+            if (n != 1):
+                silhouette_avg = silhouette_score(transformed, labels)
+                CH=metrics.calinski_harabasz_score(transformed, labels)
+                DB=metrics.davies_bouldin_score(transformed, labels)
+                print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"), 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
+                list_score.append(silhouette_avg)
+                DB_score.append(DB)
+                best_score.append(silhouette_avg-DB)
+                del(model)
+                del(labels)
+        top_clusters = (best_score.index(max(best_score)))+2
+        num_clusters=top_clusters
+        print("\n\n\033[1;31;47mBest cluster in the range 2 to ", n_tries-1, ": ",top_clusters,", with a silhouette score of: ",list_score[top_clusters-2], "\u001b[0m  \n\n")
+  
+        model = KMeans(n_clusters=top_clusters, n_init='auto', copy_x=True, algorithm='lloyd')
+        labels = model.fit_predict(transformed)
+
+    elif clustering == 'fuzzy':
+        for n in range (1,n_tries):
+            cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, n, 2, error=0.005, maxiter=3000, init=None)
+            labels = np.argmax(u, axis=0)
+            if (n !=1):
+                silhouette_avg = silhouette_score(transformed, labels)
+                CH=metrics.calinski_harabasz_score(transformed, labels)
+                DB=metrics.davies_bouldin_score(transformed, labels)
+                print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"), 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
+                list_score.append(silhouette_avg)
+                DB_score.append(DB)
+                best_score.append(2*silhouette_avg-DB)
+                del(u)
+                del(labels)
+        
+        top_clusters = (best_score.index(max(best_score)))+2
+        #creare vettore con (silhouette - DB) e selezionare massimo
+        num_clusters=top_clusters
+        print("\n\n\033[1;31;47mBest cluster in the range 2 to ", n_tries-1, ":" ,top_clusters,", with a silhouette score of: ",list_score[top_clusters-2],'DB:',DB_score[top_clusters-2], "\u001b[0m  \n\n")
+        cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, top_clusters, 2, error=0.005, maxiter=3000, init=None)
+        labels = np.argmax(u, axis=0)
+    
+    final_data=[]
+    temporary_data=[]
+    unique_labels = np.unique(labels)
+    clusters=clustersdtw(cut,labels,unique_labels)
+    clus=[]
+    cluster_data=[]
+    firings=np.zeros(len(clusters))
+    for i in range(len(clusters)):
+        clus.append(i)
+        clusterings=[]
+        for j in range(len(clusters[i])):
+            clusterings.extend(cut[labels==clusters[i][j]])
+        cluster_data.append(clusterings)
+        arr_cd=np.array(cluster_data)
+        firings[i]=len(arr_cd)*10000/len_data
+        # Plot the individual cluster data
+        if len(clus)<=2:
+            size1=len(clus)
+            size2=1
+        elif len(clus)<=5:
+            size1 = math.ceil(len(clus)/2)
+            size2=size1
+        elif len(clus)<=8:
+            size1 = 3
+            size2=math.ceil(len(clus)/size1)
+        else:
+            size1=6
+            size2=math.ceil(len(clus)/size1)
+        plt.subplot(size1,size2, i + 1)
+        plt.plot(np.array(arr_cd).transpose(), alpha=0.5)  # Use alpha for transparency
+        plt.title(f'Cluster {i} \n numerosity: {len(arr_cd)}')
+        plt.xlabel('Time [ms]')
+        plt.ylabel('Signal Amplitude')
+
+        # Plot the average waveform
+        mean_wave = np.mean(cluster_data, axis=0)
+        info.append(f'mean clus{cluster_label}')
+        info.append(mean_wave)
+        std_wave = np.std(cluster_data, axis=0)
+        plt.errorbar(range(mean_wave.shape[0]), mean_wave, yerr=std_wave, color='black', linewidth=2, label='Avg. Waveform')
+        plt.legend(loc='lower right')
+    plt.tight_layout()
+
+    mean_firing=np.mean(firings)
+    std_firing=np.std(firings)
+    firing_threshold=mean_firing-std_firing
+    print('firing rate threshold: ',firing_threshold)
+    info.append('firing threshold')
+    info.append(firing_threshold)
+    info.append('mean firing')
+    info.append(mean_firing)
+    plt.subplots_adjust(hspace=0.5)
+    plt.show()
+    spike_list=np.array(spike_list)
+    for i in range(0,len(clus)):
+        ul=spike_list[labels==i]
+        temporary_data.append(ul)
+        fr=len(temporary_data[i])*10000/len_data
+        if i != -1 and fr>firing_threshold:
+            final_data.append(ul)
+        plt.subplot(size1, size2, i + 1)
+        plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
+        plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i])}, \n firing rate: {format(len(temporary_data[i])*10000/len_data, ".3f")}')
+    plt.subplots_adjust(hspace=2.5)
+    plt.show()
+    del(unique_labels)
+    return final_data, info
+
+
+#########################
+def clustersdtw(cut,labels,unique_labels):
+    u_l=copy.deepcopy(unique_labels)
+    labs=unique_labels
+    clusters=[]
+    list0=[]
+    list0.append(0)
+    clusters.append(list0)
+    for i, first_cluster_loop in enumerate(u_l):
+        spike1=np.mean(cut[labels==first_cluster_loop],axis=0)
+        check=0
+        for i in range(len(clusters)):
+            if first_cluster_loop in clusters[i]:
+                check=1
+        if check==0:
+            list0=[]
+            list0.append(first_cluster_loop)
+            clusters.append(list0)
+        for j, second_cluster_loop in enumerate(u_l[i+1:]):
+            spike2=np.mean(cut[labels==second_cluster_loop],axis=0)
+            distance,path=fastdtw(spike1, spike2)
+            if distance<=4 and first_cluster_loop!=second_cluster_loop:
+                for arr in clusters:
+                    if first_cluster_loop in arr and second_cluster_loop not in arr:
+                        arr.append(second_cluster_loop)
+                        ind=np.where(labs==second_cluster_loop)
+                        labs=np.delete(labs,ind)
+                    elif first_cluster_loop not in arr and second_cluster_loop in arr:
+                        arr.append(first_cluster_loop)
+                        ind=np.where(labs==first_cluster_loop)
+                        labs=np.delete(labs,ind)                    
+
+    return clusters
 #____________________________________________________________________________________FILT BUTTERWORTH_________________________________
 
 from scipy.signal import ellip, cheby1, bessel, butter, lfilter, filtfilt, iirfilter
