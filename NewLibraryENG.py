@@ -214,7 +214,8 @@ def clus(cut,clustering,spike_list,data):
     import skfuzzy as fuzz
     import numpy as np
     import math
-    n_tries=15
+    n_min=3
+    n_tries=11
     len_data=len(data)
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
@@ -224,49 +225,51 @@ def clus(cut,clustering,spike_list,data):
     transformed = pca.fit_transform(estratti_norm)
 
     info=[]
-    list_score=[]
-    DB_score=[]
+    #list_score=[]
+    #DB_score=[]
     best_score=[]
     if clustering=='kmeans':
-        for n in range (1,n_tries):
+        for n in range (n_min,n_tries):
             model = KMeans(n_clusters=n, n_init='auto', copy_x=True, algorithm='lloyd')
             labels = model.fit_predict(transformed)
             if (n != 1):
                 silhouette_avg = silhouette_score(transformed, labels)
-                CH=metrics.calinski_harabasz_score(transformed, labels)
-                DB=metrics.davies_bouldin_score(transformed, labels)
-                print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"), 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
-                list_score.append(silhouette_avg)
-                DB_score.append(DB)
-                best_score.append(silhouette_avg-DB)
+                #CH=metrics.calinski_harabasz_score(transformed, labels)
+                #DB=metrics.davies_bouldin_score(transformed, labels)
+                print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"))#, 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
+                #list_score.append(silhouette_avg)
+                #DB_score.append(DB)
+                #best_score.append(silhouette_avg-DB)
+                best_score.append(silhouette_avg)
                 del(model)
                 del(labels)
-        top_clusters = (best_score.index(max(best_score)))+2
+        top_clusters = (best_score.index(max(best_score)))+n_min
         num_clusters=top_clusters
-        print("\n\n\033[1;31;47mBest cluster in the range 2 to ", n_tries-1, ": ",top_clusters,", with a silhouette score of: ",list_score[top_clusters-2], "\u001b[0m  \n\n")
+        print("\n\n\033[1;31;47mBest cluster in the range", n_min, "to ", n_tries-1, ": ",top_clusters,", with a silhouette score of: ",best_score[top_clusters-n_min], "\u001b[0m  \n\n")
   
         model = KMeans(n_clusters=top_clusters, n_init='auto', copy_x=True, algorithm='lloyd')
         labels = model.fit_predict(transformed)
 
     elif clustering == 'fuzzy':
-        for n in range (1,n_tries):
+        for n in range (n_min,n_tries):
             cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, n, 2, error=0.005, maxiter=3000, init=None)
             labels = np.argmax(u, axis=0)
             if (n !=1):
                 silhouette_avg = silhouette_score(transformed, labels)
-                CH=metrics.calinski_harabasz_score(transformed, labels)
-                DB=metrics.davies_bouldin_score(transformed, labels)
-                print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"), 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
-                list_score.append(silhouette_avg)
-                DB_score.append(DB)
-                best_score.append(2*silhouette_avg-DB)
+                #CH=metrics.calinski_harabasz_score(transformed, labels)
+                #DB=metrics.davies_bouldin_score(transformed, labels)
+                print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"))#, 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
+                #list_score.append(silhouette_avg)
+                #DB_score.append(DB)
+                #best_score.append(2*silhouette_avg-DB)
+                best_score.append(silhouette_avg)
                 del(u)
                 del(labels)
         
-        top_clusters = (best_score.index(max(best_score)))+2
+        top_clusters = (best_score.index(max(best_score)))+n_min
         #creare vettore con (silhouette - DB) e selezionare massimo
         num_clusters=top_clusters
-        print("\n\n\033[1;31;47mBest cluster in the range 2 to ", n_tries-1, ":" ,top_clusters,", with a silhouette score of: ",list_score[top_clusters-2],'DB:',DB_score[top_clusters-2], "\u001b[0m  \n\n")
+        print("\n\n\033[1;31;47mBest cluster in the range",n_min," to ", n_tries-1, ":" ,top_clusters,", with a silhouette score of: ",best_score[top_clusters-n_min])#,'DB:',DB_score[top_clusters-n_min], "\u001b[0m  \n\n")
         cntr, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(transformed.T, top_clusters, 2, error=0.005, maxiter=3000, init=None)
         labels = np.argmax(u, axis=0)
     
@@ -335,7 +338,7 @@ def clus(cut,clustering,spike_list,data):
     plt.subplots_adjust(hspace=2.5)
     plt.show()
     del(unique_labels)
-    return final_data, info
+    return final_data
 #################
 def NEWclus(cut,clustering,spike_list,data):
     from sklearn.cluster import KMeans
@@ -358,8 +361,8 @@ def NEWclus(cut,clustering,spike_list,data):
     transformed = pca.fit_transform(estratti_norm)
 
     info=[]
-    list_score=[]
-    DB_score=[]
+    #list_score=[]
+    #DB_score=[]
     best_score=[]
     if clustering=='kmeans':
         for n in range (1,n_tries):
@@ -367,12 +370,13 @@ def NEWclus(cut,clustering,spike_list,data):
             labels = model.fit_predict(transformed)
             if (n != 1):
                 silhouette_avg = silhouette_score(transformed, labels)
-                CH=metrics.calinski_harabasz_score(transformed, labels)
-                DB=metrics.davies_bouldin_score(transformed, labels)
-                print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"), 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
-                list_score.append(silhouette_avg)
-                DB_score.append(DB)
-                best_score.append(silhouette_avg-DB)
+                #CH=metrics.calinski_harabasz_score(transformed, labels)
+                #DB=metrics.davies_bouldin_score(transformed, labels)
+                print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"))#, 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
+                #list_score.append(silhouette_avg)
+                #DB_score.append(DB)
+                #best_score.append(silhouette_avg-DB)
+                best_score.append(silhouette_avg)
                 del(model)
                 del(labels)
         top_clusters = (best_score.index(max(best_score)))+2
@@ -388,12 +392,12 @@ def NEWclus(cut,clustering,spike_list,data):
             labels = np.argmax(u, axis=0)
             if (n !=1):
                 silhouette_avg = silhouette_score(transformed, labels)
-                CH=metrics.calinski_harabasz_score(transformed, labels)
-                DB=metrics.davies_bouldin_score(transformed, labels)
-                print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"), 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
-                list_score.append(silhouette_avg)
-                DB_score.append(DB)
-                best_score.append(2*silhouette_avg-DB)
+                #CH=metrics.calinski_harabasz_score(transformed, labels)
+                #DB=metrics.davies_bouldin_score(transformed, labels)
+                print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"))#, 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
+                #list_score.append(silhouette_avg)
+                #DB_score.append(DB)
+                best_score.append(silhouette_avg)#-DB)
                 del(u)
                 del(labels)
         
@@ -506,6 +510,59 @@ def clustersdtw(cut,labels,unique_labels):
                         labs=np.delete(labs,ind)                    
 
     return clusters
+
+################################POINT PROCESS
+def Bayesian_mixture_model(ISI_data):
+    with pm.Model() as model:
+        ##### WALD DISTRIBUTION (INVERSE GAUSSIAN)
+        mu1 = pm.Uniform('mu1',lower=0.01,upper=0.1)
+        lam1 = pm.Uniform('lam1',lower=0.01,upper=0.04)
+        obs1 = pm.Wald.dist(mu=mu1,lam=lam1)
+
+
+        mu2 = pm.Uniform('mu2',lower=0,upper=0.2)
+        sigma2 = pm.Uniform('sigma2',lower=0.0001,upper=0.5)
+        obs2 = pm.TruncatedNormal.dist(mu=mu2, sigma=sigma2, lower=0.0)
+
+        mu3 = pm.Uniform('mu3',lower=0.1,upper=0.6)
+        sigma3 = pm.Uniform('sigma3',lower=0.0001,upper=0.5)
+        obs3 = pm.TruncatedNormal.dist(mu=mu3, sigma=sigma3, lower=0.0)
+
+
+        w = pm.Dirichlet('w', a=np.array([1., .4, .4]))
+        #w = pm.Dirichlet('w', a=np.array([1., .4]))
+
+        like = pm.Mixture('like', w=w, comp_dists = [obs1, obs2, obs3], observed=ISI_data)
+        #like = pm.Mixture('like', w=w, comp_dists = [obs1, obs2], observed=ISI_data)
+
+        step = pm.NUTS(target_accept=0.9)
+        trace = pm.sample(step=step,draws=1000,chains=1,tune=1000,cores=4)
+        
+        #ppc_trace = pm.sample_posterior_predictive(trace,model=model)
+        
+    map_estimate = pm.find_MAP(model=model)
+    
+    del map_estimate['w_simplex__']
+    del map_estimate['mu1_interval__']
+    del map_estimate['lam1_interval__']
+    del map_estimate['mu2_interval__']
+    del map_estimate['sigma2_interval__']
+    del map_estimate['mu3_interval__']
+    del map_estimate['sigma3_interval__']
+    
+    map_estimate['w1'] = map_estimate['w'][0]
+    map_estimate['w2'] = map_estimate['w'][1]
+    map_estimate['w3'] = map_estimate['w'][2]
+
+    del map_estimate['w']
+
+
+    return map_estimate#, ppc_trace
+#######################
+
+
+
+
 #____________________________________________________________________________________FILT BUTTERWORTH_________________________________
 
 from scipy.signal import ellip, cheby1, bessel, butter, lfilter, filtfilt, iirfilter
