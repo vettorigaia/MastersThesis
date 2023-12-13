@@ -212,11 +212,11 @@ def clus(cut,clustering,spike_list,data):
     import numpy as np
     import math
     n_min=3
-    #n_tries=11
+    n_tries=15
     spike_list=np.array(spike_list)
-    print('len spike list: ',len(spike_list))
-    print('n tries: ', int(len(spike_list)/1000))
-    n_tries=int(len(spike_list)/1000)+2
+    #print('len spike list: ',len(spike_list))
+    #print('n tries: ', int(len(spike_list)/1000))
+    #n_tries=int(len(spike_list)/1000)+1
     len_data=len(data)
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
