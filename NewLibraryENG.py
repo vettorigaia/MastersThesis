@@ -215,7 +215,11 @@ def clus(cut,clustering,spike_list,data):
     import numpy as np
     import math
     n_min=3
-    n_tries=11
+    #n_tries=11
+    spike_list=np.array(spike_list)
+    print('len spike list: ',len(spike_list))
+    print('n tries: ', int(len(spike_list)/1000))
+    n_tries=int(len(spike_list)/1000)+2
     len_data=len(data)
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
@@ -325,7 +329,7 @@ def clus(cut,clustering,spike_list,data):
     info.append(mean_firing)
     plt.subplots_adjust(hspace=0.5)
     plt.show()
-    spike_list=np.array(spike_list)
+
     for i in range(0,len(unique_labels)):
         ul=spike_list[labels==i]
         temporary_data.append(ul)
@@ -538,7 +542,7 @@ def Bayesian_mixture_model(ISI_data):
         step = pm.NUTS(target_accept=0.9)
         trace = pm.sample(step=step,draws=1000,chains=1,tune=1000,cores=4)
         
-        #ppc_trace = pm.sample_posterior_predictive(trace,model=model)
+        ppc_trace = pm.sample_posterior_predictive(trace,model=model)
         
     map_estimate = pm.find_MAP(model=model)
     
@@ -557,7 +561,7 @@ def Bayesian_mixture_model(ISI_data):
     del map_estimate['w']
 
 
-    return map_estimate#, ppc_trace
+    return map_estimate, ppc_trace
 #######################
 
 
