@@ -102,13 +102,11 @@ def cut(pos,neg,data):
         if (i-prima >= 0) and (i+dopo <= dim):
             spike= data[(int(i)-prima):(int(i)+dopo)].squeeze()
             media=(np.mean(spike))
-            #std=scipy.stats.median_abs_deviation(spike)
             std=np.std(spike)
             spike_std=(spike-media)/std
             media=np.mean(spike_std)
             std=np.std(spike_std)
-            #if abs(std)<=2*abs(signal_std) and abs(media)<=10*abs(signal_mean):
-            if abs(std)<=3*abs(signal_std) and abs(media)<=10*abs(signal_mean):
+            if abs(std)<=2*abs(signal_std) and abs(media)<=10*abs(signal_mean):
                 pos_cut[k,:] = spike_std
                 pos_new.append(i)
                 k += 1
@@ -121,7 +119,6 @@ def cut(pos,neg,data):
         if (i-prima >= 0) and (i+dopo <= dim):
             spike= data[(int(i)-prima):(int(i)+dopo)].squeeze()
             media=(np.mean(spike))
-            #std=scipy.stats.median_abs_deviation(spike)
             std=np.std(spike)
             spike_std=(spike-media)/std
             media=np.mean(spike_std)
