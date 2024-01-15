@@ -341,7 +341,7 @@ def clus(cut,clustering,spike_list,data):
     del(unique_labels)
     return final_data
 #################
-def clus(cut,clustering,spike_list,data,switch_index):
+def switch_clus(cut,clustering,spike_list,data,switch_index):
     from sklearn.cluster import KMeans
     from sklearn.cluster import DBSCAN, HDBSCAN
     from sklearn.preprocessing import StandardScaler
