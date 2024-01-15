@@ -211,8 +211,8 @@ def clus(cut,clustering,spike_list,data):
     import skfuzzy as fuzz
     import numpy as np
     import math
-    n_min=3
-    n_tries=15
+    n_min=2
+    n_tries=11
     spike_list=np.array(spike_list)
     #print('len spike list: ',len(spike_list))
     #print('n tries: ', int(len(spike_list)/1000))
