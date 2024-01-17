@@ -200,7 +200,7 @@ def hdbscan_clustering(cut,spike_list,len_data):
     plt.show()
     return final_data
 
-def clus(cut,clustering,spike_list,data):
+def clus(cut,clustering,spike_list,data,flag=0):
     from sklearn.cluster import KMeans
     from sklearn.cluster import DBSCAN, HDBSCAN
     from sklearn.preprocessing import StandardScaler
@@ -318,7 +318,7 @@ def clus(cut,clustering,spike_list,data):
 
     mean_firing=np.mean(firings)
     std_firing=np.std(firings)
-    firing_threshold=mean_firing-std_firing
+    firing_threshold=mean_firing-3*std_firing
     print('firing rate threshold: ',firing_threshold)
     info.append('firing threshold')
     info.append(firing_threshold)
@@ -338,8 +338,28 @@ def clus(cut,clustering,spike_list,data):
         plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i])}, \n firing rate: {format(len(temporary_data[i])*10000/len_data, ".3f")}')
     plt.subplots_adjust(hspace=2.5)
     plt.show()
-    del(unique_labels)
-    return final_data
+    if top_clusters==2 and flag==0:
+        flag=1
+        subgroup_indices = final_data[0]
+        spike_list0 = [np.where(np.isin(spike_list, indices))[0] for indices in subgroup_indices]
+        cut0 = [cut[pos] for pos in spike_list0]
+        cut_np = np.array(cut0)
+        cut0 = cut_np.reshape(cut_np.shape[0], -1)
+        spike_list0 = np.concatenate([arr.flatten() for arr in spike_list0])
+        subgroup_indices = final_data[1]
+        spike_list1 = [np.where(np.isin(spike_list, indices))[0] for indices in subgroup_indices]
+        cut1 = [cut[pos] for pos in spike_list1]
+        cut_np = np.array(cut1)
+        cut1 = cut_np.reshape(cut_np.shape[0], -1)
+        spike_list1 = np.concatenate([arr.flatten() for arr in spike_list1])
+        
+        
+        final_data=clus(cut0,'kmeans',spike_list0,data)
+        final_data.append(clus(cut1,'kmeans',spike_list1,data))
+
+    else:
+        del(unique_labels)
+        return final_data
 #################
 def switch_clus(cut,clustering,spike_list,data,switch_index):
     from sklearn.cluster import KMeans
