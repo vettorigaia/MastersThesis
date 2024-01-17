@@ -266,6 +266,8 @@ def clus(cut,clustering,spike_list,data,flag=0):
                 best_score.append(silhouette_avg)
                 del(u)
                 del(labels)
+            if silhouette_avg<0.06:
+                break       
         
         top_clusters = (best_score.index(max(best_score)))+n_min
         #creare vettore con (silhouette - DB) e selezionare massimo
@@ -409,8 +411,10 @@ def nested_clus(cut,clustering,spike_list,data,flag=0):
                 best_score.append(silhouette_avg)
                 del(u)
                 del(labels) 
-            if silhouette_avg<0.08:
+            if silhouette_avg<0.06:
                 break       
+            if silhouette_avg>0.3:
+                flag=1
         top_clusters = (best_score.index(max(best_score)))+n_min
         #creare vettore con (silhouette - DB) e selezionare massimo
         num_clusters=top_clusters
@@ -463,6 +467,7 @@ def nested_clus(cut,clustering,spike_list,data,flag=0):
     mean_firing=np.mean(firings)
     std_firing=np.std(firings)
     firing_threshold=mean_firing-3*std_firing
+    firing_threshold=0.08
     print('firing rate threshold: ',firing_threshold)
     info.append('firing threshold')
     info.append(firing_threshold)
@@ -482,6 +487,7 @@ def nested_clus(cut,clustering,spike_list,data,flag=0):
         plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i])}, \n firing rate: {format(len(temporary_data[i])*10000/len_data, ".3f")}')
     plt.subplots_adjust(hspace=2.5)
     plt.show()
+    print('flag: ',flag)
     if top_clusters==2 and flag==0:
         subgroup_indices = final_data[0]
         spike_list0 = [np.where(np.isin(spike_list, indices))[0] for indices in subgroup_indices]
@@ -489,6 +495,7 @@ def nested_clus(cut,clustering,spike_list,data,flag=0):
         cut_np = np.array(cut0)
         cut0 = cut_np.reshape(cut_np.shape[0], -1)
         spike_list0 = np.concatenate([arr.flatten() for arr in spike_list0])
+        
         subgroup_indices = final_data[1]
         spike_list1 = [np.where(np.isin(spike_list, indices))[0] for indices in subgroup_indices]
         cut1 = [cut[pos] for pos in spike_list1]
@@ -497,16 +504,23 @@ def nested_clus(cut,clustering,spike_list,data,flag=0):
         spike_list1 = np.concatenate([arr.flatten() for arr in spike_list1])
         
         print(len(cut0),len(cut1))
-        if len(cut0)<=7000 | len(cut1)<=7000:
+        print('flag: ',flag)
+        if len(cut0)<=7000 or len(cut1)<=7000:
             flag=1
+        print('flag: ',flag)
         print('first sub-clustering')
-        final_data=clus(cut0,'kmeans',spike_list0,data)
+        del final_data
+        final_data=nested_clus(cut0,'fuzzy',spike_list0,data,flag)
+        print('flag: ',flag)
         print('second sub-clustering')
-        final_data.append(clus(cut1,'kmeans',spike_list1,data))
+        final_data1=nested_clus(cut1,'fuzzy',spike_list1,data,flag)
+        print('flag: ',flag)
+        for arr in final_data1:
+            final_data.append(arr)
 
     else:
         del(unique_labels)
-        return final_data
+    return final_data
 #################
 
 
@@ -1030,6 +1044,8 @@ def Bayesian_mixture_model(ISI_data):
         trace = pm.sample(step=step,draws=1000,chains=1,tune=1000,cores=4)
         
         ppc_trace = pm.sample_posterior_predictive(trace,model=model)
+        if ppc_trace==0:
+            print('ppc_trace not succesful')
         
     map_estimate = pm.find_MAP(model=model)
     
