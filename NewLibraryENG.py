@@ -42,18 +42,21 @@ def mask_cuts(cut):
     #print(cut.shape)
     return cut
 
-def find_all_spikes(data):
+def find_all_spikes(data,thresh):
     pos=[]
     neg=[]
-    window_size=10000 #(1000 ms)
+    window_size=100000 #(1000 ms)
     pbar = tqdm(total = len(data)-window_size)
     i=0
     i_bf=0
+    #mad=scipy.stats.median_abs_deviation(data)
+    #thresh=3*mad
     while i <len(data)-window_size-11:
         window=data[i:i+window_size]
         neg_window=-window
-        mad=scipy.stats.median_abs_deviation(window)
-        thresh=4.3*mad
+        #mad=scipy.stats.median_abs_deviation(window)
+        #mad=scipy.stats.median_abs_deviation(data)
+        #thresh=4.3*mad
         pos_peaks=find_peaks(window.ravel(),height=float(thresh))
         neg_peaks=find_peaks(neg_window.ravel(),height=float(thresh))
         lp=len(pos_peaks[0])
@@ -366,7 +369,7 @@ def nested_clus(cut,clustering,spike_list,data,flag=0):
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
     print('Total spikes: ', estratti_norm.shape[0])
-    n_comp=10
+    n_comp=6
     pca = PCA(n_components=n_comp)
     transformed = pca.fit_transform(estratti_norm)
 
