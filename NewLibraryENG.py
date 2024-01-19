@@ -45,7 +45,7 @@ def mask_cuts(cut):
 def find_all_spikes(data,thresh):
     pos=[]
     neg=[]
-    window_size=100000 #(1000 ms)
+    window_size=10000 #(10 s)
     pbar = tqdm(total = len(data)-window_size)
     i=0
     i_bf=0
@@ -56,7 +56,7 @@ def find_all_spikes(data,thresh):
         neg_window=-window
         #mad=scipy.stats.median_abs_deviation(window)
         #mad=scipy.stats.median_abs_deviation(data)
-        #thresh=4.3*mad
+        #thresh=3*mad
         pos_peaks=find_peaks(window.ravel(),height=float(thresh))
         neg_peaks=find_peaks(neg_window.ravel(),height=float(thresh))
         lp=len(pos_peaks[0])
@@ -84,7 +84,7 @@ def find_all_spikes(data,thresh):
     print('positive spikes',len(pos),'negative spikes',len(neg),'detected spikes:', len(pos)+len(neg), 'firing rate: ',firing_rate)
     return pos,neg
 
-def cut(pos,neg,data):
+def cut(pos,neg,data,c1):
     pre = 0.0015
     post = 0.0015
     fs=10000
@@ -107,9 +107,9 @@ def cut(pos,neg,data):
             media=(np.mean(spike))
             std=np.std(spike)
             spike_std=(spike-media)/std
-            media=np.mean(spike_std)
-            std=np.std(spike_std)
-            if abs(std)<=2*abs(signal_std) and abs(media)<=10*abs(signal_mean):
+            #media=np.mean(spike_std)
+            #std=np.std(spike_std)
+            if abs(std)<=c1*abs(signal_std) :#and abs(media)<=c2*abs(signal_mean):
                 pos_cut[k,:] = spike_std
                 pos_new.append(i)
                 k += 1
@@ -124,19 +124,19 @@ def cut(pos,neg,data):
             media=(np.mean(spike))
             std=np.std(spike)
             spike_std=(spike-media)/std
-            media=np.mean(spike_std)
-            std=np.std(spike_std)            
-            if abs(std)<=2*abs(signal_std) and abs(media)<=10*abs(signal_mean): 
+            #media=np.mean(spike_std)
+            #std=np.std(spike_std)            
+            if abs(std)<=c1*abs(signal_std) :#and abs(media)<=c2*abs(signal_mean): 
                 neg_cut[k,:] = spike_std
                 neg_new.append(i)
                 k  += 1
     negsize=k
     neg_cut=neg_cut[0:negsize]
-    #print(np.isnan(pos_cut).sum(),len(pos_cut),len(pos_new),np.isnan(neg_cut).sum(),len(neg_cut),len(neg_new))
+    print('positive spikes removed: ',len(pos)-len(pos_new),'negative spikes removed: ',len(neg)-len(neg_new))
     return pos_cut,pos_new,neg_cut,neg_new
 
 
-def hdbscan_clustering(cut,spike_list,len_data):
+def hdbscan_clustering(cut,spike_list,data):
     from sklearn.cluster import HDBSCAN
     from sklearn.preprocessing import StandardScaler
     from sklearn.decomposition import PCA
@@ -198,7 +198,7 @@ def hdbscan_clustering(cut,spike_list,len_data):
             final_data.append(ul)
         plt.subplot(quad, quad, i + 2)
         plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
-        plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i+1])}, \n firing rate: {len(temporary_data[i+1])*10000/len_data}')
+        plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i+1])}, \n firing rate: {len(temporary_data[i+1])*10000/len(data)}')
     plt.subplots_adjust(hspace=2)
     plt.show()
     return final_data
@@ -348,7 +348,7 @@ def clus(cut,clustering,spike_list,data,flag=0):
     return final_data
 #################
 
-def nested_clus(cut,clustering,spike_list,data,flag=0):
+def nested_clus(cut,clustering,spike_list,data,flag=0,count=0):
     from sklearn.cluster import KMeans
     from sklearn.cluster import DBSCAN, HDBSCAN
     from sklearn.preprocessing import StandardScaler
@@ -430,7 +430,7 @@ def nested_clus(cut,clustering,spike_list,data,flag=0):
     unique_labels = np.unique(labels)
     firings=np.zeros(len(unique_labels))
     
-    fig = plt.figure(figsize=(10, 12))
+    fig = plt.figure(figsize=(6, 3))
 
     # Iterate over unique cluster labels
     for i, cluster_label in enumerate(unique_labels):
@@ -440,8 +440,8 @@ def nested_clus(cut,clustering,spike_list,data,flag=0):
         
         # Plot the individual cluster data
         if len(unique_labels)<=2:
-            size1=len(unique_labels)
-            size2=1
+            size1=1
+            size2=len(unique_labels)
         elif len(unique_labels)<=5:
             size1 = math.ceil(len(unique_labels)/2)
             size2=size1
@@ -479,6 +479,7 @@ def nested_clus(cut,clustering,spike_list,data,flag=0):
     plt.subplots_adjust(hspace=0.5)
     plt.show()
 
+    fig = plt.figure(figsize=(6, 3))
     for i in range(0,len(unique_labels)):
         ul=spike_list[labels==i]
         temporary_data.append(ul)
@@ -492,6 +493,7 @@ def nested_clus(cut,clustering,spike_list,data,flag=0):
     plt.show()
     print('flag: ',flag)
     if top_clusters==2 and flag==0:
+        count+=1
         subgroup_indices = final_data[0]
         spike_list0 = [np.where(np.isin(spike_list, indices))[0] for indices in subgroup_indices]
         cut0 = [cut[pos] for pos in spike_list0]
@@ -508,15 +510,16 @@ def nested_clus(cut,clustering,spike_list,data,flag=0):
         
         print(len(cut0),len(cut1))
         print('flag: ',flag)
-        if len(cut0)<=7000 or len(cut1)<=7000:
+        if count>=2 or len(cut0)<=1000 or len(cut1)<=1000:
             flag=1
         print('flag: ',flag)
-        print('first sub-clustering')
+        print('first sub-clustering, count: ',count)
         del final_data
-        final_data=nested_clus(cut0,'fuzzy',spike_list0,data,flag)
+        final_data=nested_clus(cut0,'fuzzy',spike_list0,data,flag,count)
         print('flag: ',flag)
-        print('second sub-clustering')
-        final_data1=nested_clus(cut1,'fuzzy',spike_list1,data,flag)
+        count=0
+        print('second sub-clustering, count: ',count)
+        final_data1=nested_clus(cut1,'fuzzy',spike_list1,data,flag,count)
         print('flag: ',flag)
         for arr in final_data1:
             final_data.append(arr)
@@ -668,7 +671,7 @@ def switch_clus(cut,clustering,spike_list,data,switch_index):
     del(unique_labels)
     return final_data
 ##################
-def bounded_clus(cut,clustering,spike_list,data):
+def bounded_clus(n_min,n_tries,cut,clustering,spike_list,data):
     from sklearn.cluster import KMeans
     from sklearn.preprocessing import StandardScaler
     from sklearn.decomposition import PCA
@@ -680,9 +683,9 @@ def bounded_clus(cut,clustering,spike_list,data):
     import math
     spike_list=np.array(spike_list)
     len_data=len(data)
-    n_min=int((10000*len(spike_list))/(2*len_data))
-    n_tries=int(((10000*len(spike_list))/(0.16*len_data)+1))
-    print('cluster range: ',n_min,n_tries)
+    #n_min=int((10000*len(spike_list))/(2*len_data))
+    #n_tries=int(((10000*len(spike_list))/(0.16*len_data)+1))
+    print('cluster range: ',n_min,n_tries-1)
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
     print('Total spikes: ', estratti_norm.shape[0])
@@ -696,14 +699,14 @@ def bounded_clus(cut,clustering,spike_list,data):
     best_score=[]
     #CH_score=[]
     if clustering=='kmeans':
-        for n in tqdm(range (n_min,n_tries)):
+        for n in range (n_min,n_tries):
             model = KMeans(n_clusters=n, n_init='auto', copy_x=True, algorithm='lloyd')
             labels = model.fit_predict(transformed)
             if (n != 1):
                 silhouette_avg = silhouette_score(transformed, labels)
                 #CH=metrics.calinski_harabasz_score(transformed, labels)
                 DB=metrics.davies_bouldin_score(transformed, labels)
-                #print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"),'DB score',format(DB, ".3f"))
+                print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"))#,'DB score',format(DB, ".3f"))
                 list_score.append(silhouette_avg)
                 DB_score.append(DB/10)
                 #best_score.append(silhouette_avg-(DB/10))
@@ -711,13 +714,14 @@ def bounded_clus(cut,clustering,spike_list,data):
                 #best_score.append(silhouette_avg)
                 del(model)
                 del(labels)
-        #top_clusters = (list_score.index(max(list_score)))+n_min
+        top_clusters = (list_score.index(max(list_score)))+n_min
         #top_DB=(DB_score.index(max(DB_score)))+n_min
-        top_clusters=(DB_score.index(min(DB_score)))+n_min
-        print('top cluster: ',(DB_score.index(min(DB_score))),'+',n_min,'=',top_clusters)
+        #top_clusters=(DB_score.index(min(DB_score)))+n_min
+        #print('top cluster: ',(DB_score.index(min(DB_score))),'+',n_min,'=',top_clusters)
+        print('optimal cluster number: ',top_clusters)
         #n_clusters=top_clusters
-        plt_value=min(DB_score)
-        plt_index=DB_score.index(min(DB_score))
+        plt_value=max(list_score)
+        plt_index=list_score.index(max(list_score))
         '''
         if top_clusters==top_DB:
             num_clusters=top_clusters
@@ -727,20 +731,20 @@ def bounded_clus(cut,clustering,spike_list,data):
         plt.figure()
         #x=np.arange(n_min,n_tries)
         plt.plot(list_score)
-        plt.plot(DB_score)
+        #plt.plot(DB_score)
         #plt.plot(CH_score)
         plt.title('Silhouette score')
         plt.xlabel('Number of clusters')
         #plt.xlabel('x')
         #plt.ylim(0,2)
         plt.scatter((list_score.index(max(list_score))), max(list_score), c='red', marker='o', label='Maximum s score')
-        plt.scatter(plt_index, plt_value, c='green', marker='o', label='Minimum DB score')
+        #plt.scatter(plt_index, plt_value, c='green', marker='o', label='Minimum DB score')
         #plt.scatter((CH_score.index(max(CH_score))), max(CH_score), c='blue', marker='o', label='Maximum CH score')
         #plt.scatter((best_score.index(min(best_score))), min(best_score), c='blue', marker='x', label='Best sil - DB score')
         plt.show()
 
         #top_clusters=num_clusters
-        print("\n\n\033[1;31;47mBest cluster in the range", n_min, "to ", n_tries-1, ": ",plt_index,top_clusters,", with a silhouette score of: ",list_score[top_clusters-n_min],'DB score: ',DB_score[top_clusters-n_min],plt_value, "\u001b[0m  \n\n")
+        print("\n\n\033[1;31;47mBest cluster in the range", n_min, "to ", n_tries-1, "is : ",top_clusters,", with a silhouette score of: ",list_score[top_clusters-n_min],"\u001b[0m  \n\n")#,'DB score: ',DB_score[top_clusters-n_min],plt_value, "\u001b[0m  \n\n")
 
         model = KMeans(n_clusters=top_clusters, n_init='auto', copy_x=True, algorithm='lloyd')
         labels = model.fit_predict(transformed)
@@ -754,7 +758,7 @@ def bounded_clus(cut,clustering,spike_list,data):
                 DB=metrics.davies_bouldin_score(transformed, labels)
                 print("For", n,"clusters, the silhouette score is:", format(silhouette_avg, ".3f"))#, 'CH score',format(CH, ".3f"),'DB score',format(DB, ".3f"))
                 list_score.append(silhouette_avg)
-                DB_score.append(DB)
+                #DB_score.append(DB)
                 #best_score.append(2*silhouette_avg-DB)
                 best_score.append(silhouette_avg)
                 del(u)
@@ -764,14 +768,14 @@ def bounded_clus(cut,clustering,spike_list,data):
         plt.figure()
         #x=np.arange(n_min,n_tries)
         plt.plot(list_score)
-        plt.plot(DB_score)
+        #plt.plot(DB_score)
         #plt.plot(CH_score)
         plt.title('Silhouette score')
         plt.xlabel('Number of clusters')
         #plt.xlabel('x')
         #plt.ylim(0,2)
         plt.scatter((list_score.index(max(list_score))), max(list_score), c='red', marker='o', label='Maximum s score')
-        plt.scatter(plt_index, plt_value, c='green', marker='o', label='Minimum DB score')
+        #plt.scatter(plt_index, plt_value, c='green', marker='o', label='Minimum DB score')
         #plt.scatter((CH_score.index(max(CH_score))), max(CH_score), c='blue', marker='o', label='Maximum CH score')
         #plt.scatter((best_score.index(min(best_score))), min(best_score), c='blue', marker='x', label='Best sil - DB score')
         plt.show()
