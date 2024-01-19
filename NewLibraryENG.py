@@ -508,19 +508,15 @@ def nested_clus(cut,clustering,spike_list,data,flag=0,count=0):
         cut1 = cut_np.reshape(cut_np.shape[0], -1)
         spike_list1 = np.concatenate([arr.flatten() for arr in spike_list1])
         
-        print(len(cut0),len(cut1))
-        print('flag: ',flag)
+        print('sub-clusters size',len(cut0),len(cut1))
         if count>=2 or len(cut0)<=1000 or len(cut1)<=1000:
             flag=1
-        print('flag: ',flag)
         print('first sub-clustering, count: ',count)
         del final_data
-        final_data=nested_clus(cut0,'fuzzy',spike_list0,data,flag,count)
-        print('flag: ',flag)
+        final_data=nested_clus(cut0,clustering,spike_list0,data,flag,count)
         count=0
         print('second sub-clustering, count: ',count)
-        final_data1=nested_clus(cut1,'fuzzy',spike_list1,data,flag,count)
-        print('flag: ',flag)
+        final_data1=nested_clus(cut1,clustering,spike_list1,data,flag,count)
         for arr in final_data1:
             final_data.append(arr)
 
@@ -671,7 +667,7 @@ def switch_clus(cut,clustering,spike_list,data,switch_index):
     del(unique_labels)
     return final_data
 ##################
-def bounded_clus(n_min,n_tries,cut,clustering,spike_list,data):
+def bounded_clus(n_comp,n_min,n_tries,cut,clustering,spike_list,data):
     from sklearn.cluster import KMeans
     from sklearn.preprocessing import StandardScaler
     from sklearn.decomposition import PCA
@@ -689,7 +685,7 @@ def bounded_clus(n_min,n_tries,cut,clustering,spike_list,data):
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
     print('Total spikes: ', estratti_norm.shape[0])
-    n_comp=10
+    #n_comp=10
     pca = PCA(n_components=n_comp)
     transformed = pca.fit_transform(estratti_norm)
 
