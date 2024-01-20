@@ -277,6 +277,7 @@ def hdbscan_clustering(cut,spike_list,len_data):
     plt.show()
     return final_data
 
+
 def clus(cut,clustering,spike_list,n,len_data):
     from sklearn.cluster import KMeans
     from sklearn.cluster import DBSCAN, HDBSCAN
@@ -292,7 +293,7 @@ def clus(cut,clustering,spike_list,n,len_data):
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
     print('Total spikes: ', estratti_norm.shape[0])
-    n_comp=10
+    n_comp=3
     pca = PCA(n_components=n_comp)
     transformed = pca.fit_transform(estratti_norm)
     #transformed=cut
