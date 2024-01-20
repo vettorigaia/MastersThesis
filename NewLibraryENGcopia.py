@@ -71,7 +71,7 @@ def spike_sorting(complete_string):
         pos=pos_ind[i]
         neg=neg_ind[i]
         channel=prova[electrode]
-        pos_cut1,n_pos1, neg_cut1,n_neg1 = cut(pos,neg,channel)
+        pos_cut1,n_pos1, neg_cut1,n_neg1 = cut(pos,neg,channel,1)
         pos_cut.append(pos_cut1)
         neg_cut.append(neg_cut1)
         n_pos.append(n_pos1)
