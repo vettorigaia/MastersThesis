@@ -26,8 +26,8 @@ import time
 def new_find_all_spikes(data,threshold):
     spike_length=30 #3ms
     ind, peaks_amp = scipy.signal.find_peaks(abs(data), height=threshold, distance= spike_length)
-    ind_pos = data[ind] > 0 
-    ind_neg = data[ind]< 0
+    ind_pos = data[ind] < 0 
+    ind_neg = data[ind] > 0
     pos = ind[ind_pos]
     neg = ind[ind_neg]
     firing_rate=(len(pos)+len(neg))*10000/len(data)
@@ -45,21 +45,16 @@ def cut(pos,neg,data,c1):
     neg_cut= np.empty([lunghezza_neg, prima+dopo])
     dim = data.shape[0]
     k=0
-    signal_mean=abs(np.mean(data))
-    #signal_std=abs(scipy.stats.median_abs_deviation(data))
     signal_std=np.std(data)
     pos_new=[]
     all_new=[]
     for i in pos:
-        #verifico che la finestra non esca dal segnale
         if (i-prima >= 0) and (i+dopo <= dim):
             spike= data[(int(i)-prima):(int(i)+dopo)].squeeze()
             media=(np.mean(spike))
             std=np.std(spike)
             spike_std=(spike-media)/std
-            #media=np.mean(spike_std)
-            #std=np.std(spike_std)
-            if abs(std)<=c1*abs(signal_std) :#and abs(media)<=c2*abs(signal_mean):
+            if abs(std)<=c1*abs(signal_std) :
                 pos_cut[k,:] = spike_std
                 pos_new.append(i)
                 all_new.append(i)
@@ -69,21 +64,19 @@ def cut(pos,neg,data,c1):
     k=0
     neg_new=[]
     for i in neg:
-        #verifico che la finestra non esca dal segnale
         if (i-prima >= 0) and (i+dopo <= dim):
             spike= data[(int(i)-prima):(int(i)+dopo)].squeeze()
             media=(np.mean(spike))
             std=np.std(spike)
             spike_std=(spike-media)/std
-            #media=np.mean(spike_std)
-            #std=np.std(spike_std)            
-            if abs(std)<=c1*abs(signal_std) :#and abs(media)<=c2*abs(signal_mean): 
+            if abs(std)<=c1*abs(signal_std) :
                 neg_cut[k,:] = spike_std
                 neg_new.append(i)
                 k  += 1
     negsize=k
     neg_cut=neg_cut[0:negsize]
-    print('positive spikes removed: ',len(pos)-len(pos_new),'negative spikes removed: ',len(neg)-len(neg_new),'total spikes: ',len(pos_new)+len(neg_new))
+    firing_rate=(len(pos_new)+len(neg_new))*10000/len(data)
+    print('positive spikes removed: ',len(pos)-len(pos_new),'negative spikes removed: ',len(neg)-len(neg_new),'total spikes: ',len(pos_new)+len(neg_new),'firing rate: ',firing_rate,' Hz')
     return pos_cut,pos_new,neg_cut,neg_new
 def mask_cuts(cut):
     before=5 #(or 50 for 5 ms : CHECK)
@@ -275,11 +268,75 @@ def bounded_clus(n_comp,n_min,n_tries,cut,clustering,spike_list,data):
     del(unique_labels)
     return final_data
 
+def comparative_clus(cut,spike_list,data):
+    from sklearn.cluster import KMeans
+    from sklearn.cluster import DBSCAN, HDBSCAN
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+    from sklearn import metrics
+    from sklearn.metrics import silhouette_score
+    from scipy.stats import kurtosis
+    import skfuzzy as fuzz
+    import numpy as np
+    import math
 
-
-
+    scale = StandardScaler()
+    estratti_norm = scale.fit_transform(cut)
+    print('Total spikes: ', estratti_norm.shape[0])
+    n_comp=3
+    pca = PCA(n_components=n_comp)
+    transformed = pca.fit_transform(estratti_norm)
+    spike_list=np.array(spike_list)
+    kmeans_score=[]
+    final_data=[]
+    for n in range (2,4):
+        model = KMeans(n_clusters=n, init='k-means++', n_init=10, max_iter=400, tol=0.00005, verbose=0, random_state=None, copy_x=True,  algorithm='lloyd')
+        labels = model.fit_predict(transformed)
+        silhouette_avg = silhouette_score(transformed, labels)
+        kmeans_score.append(silhouette_avg)
+    top_clusters_kmeans = kmeans_score.index(max(kmeans_score))+2
+    print('\n______________________________________________________________________________________________________________')
+    if max(kmeans_score)>=0.3:
+        print("\n\n\033[1;31;47mBest cluster in the range 1 to 3: ",top_clusters_kmeans,", with a silhouette score of: ",max(kmeans_score), "\u001b[0m  \n\n")
+        model = KMeans(n_clusters=top_clusters_kmeans, init='k-means++', n_init=10, max_iter=400, tol=0.00005,  verbose=0, random_state=None, copy_x=True, algorithm='lloyd')
+        labels = model.fit_predict(transformed)
+    else:
+        print('Clustering algorithm detected only one cluster')
+        labels=np.zeros(len(spike_list))
+    unique_labels=np.unique(labels)
+    firings=np.zeros(len(unique_labels))
+    fig = plt.figure(figsize=(6, 8))
+    for i, cluster_label in enumerate(unique_labels):
+        cluster_data = cut[labels == cluster_label]
+        plotting_data=cluster_data.transpose()
+        firings[i]=len(cluster_data)*10000/len(data)
+        plt.subplot(3,1, i + 1)
+        plt.plot(plotting_data, alpha=0.5)  # Use alpha for transparency
+        plt.title(f'Cluster {cluster_label} \n numerosity: {len(cluster_data)}')
+        plt.xlabel('Time [ms]')
+        plt.ylabel('Signal Amplitude')
+        mean_wave = np.mean(cluster_data, axis=0)
+        std_wave = np.std(cluster_data, axis=0)
+        plt.errorbar(range(mean_wave.shape[0]), mean_wave, yerr=std_wave, color='black', linewidth=2, label='Avg. Waveform')
+        plt.legend(loc='lower right')
+        plt.show()
+        ul=spike_list[labels==i]
+        final_data.append(ul)
+        plt.subplot(3, 1, i + 1)
+        plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
+        plt.title(f'ISI: Cluster {i}, \n firing rate: {format(len(final_data[i])*10000/len(data), ".3f")}')
+        plt.show()
+    return final_data
+    
 ##############
 def find_all_spikes(data,thresh):
+    spike_length=30 #3ms
+    ind, peaks_amp = scipy.signal.find_peaks(abs(data), height=thresh, distance= spike_length)
+    firing_rate=(len(ind)*10000)/len(data)
+    print('all spikes',len(ind), 'firing rate: ',firing_rate)
+    return ind
+
+def old_find_all_spikes(data,thresh):
     pos=[]
     neg=[]
     neg_data=-data
@@ -333,28 +390,24 @@ def cut_all(all,data,c1):
     cut= np.empty([lunghezza_indici, prima+dopo])
     dim = data.shape[0]
     k=0
-    #signal_std=abs(scipy.stats.median_abs_deviation(data))
     signal_std=np.std(data)
     all_new=[]
     for i in all:
-        #verifico che la finestra non esca dal segnale
         if (i-prima >= 0) and (i+dopo <= dim):
             spike= data[(int(i)-prima):(int(i)+dopo)].squeeze()
             media=(np.mean(spike))
             std=np.std(spike)
             spike_std=(spike-media)/std
-            #media=np.mean(spike_std)
-            #std=np.std(spike_std)
-            if abs(std)<=c1*abs(signal_std) :#and abs(media)<=c2*abs(signal_mean):
+            if abs(std)<=c1*abs(signal_std):
                 cut[k,:] = spike_std
                 all_new.append(i)
                 k += 1
-    possize=k
-    cut=cut[0:possize]
+    size=k
+    cut=cut[0:size]
     print('spikes removed: ',len(all)-len(all_new))
     return cut,all_new
 
-def hdbscan_clustering(cut,spike_list,data,mcs,ms,eps,mxcs,ls):
+def hdbscan_clustering(n_comp,cut,spike_list,data,mcs,ms,eps,mxcs,ls):
     from sklearn.cluster import HDBSCAN
     from sklearn.preprocessing import StandardScaler
     from sklearn.decomposition import PCA
@@ -365,7 +418,7 @@ def hdbscan_clustering(cut,spike_list,data,mcs,ms,eps,mxcs,ls):
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
     print('Total spikes: ', estratti_norm.shape[0])
-    n_comp=10
+    #n_comp=10
     pca = PCA(n_components=n_comp)
     transformed = pca.fit_transform(estratti_norm)
     #transformed=cut
@@ -381,45 +434,64 @@ def hdbscan_clustering(cut,spike_list,data,mcs,ms,eps,mxcs,ls):
 
     if len(unique_labels) == 1:
         print("HDBSCAN assigned only one cluster.")
+        cluster_data=cut
+        fig = plt.figure(figsize=(4, 5))
+        plt.plot(cluster_data.transpose(), alpha=0.5)
+        plt.title(f'Cluster 0')
+        plt.xlabel('Time [ms]')
+        plt.ylabel('Signal Amplitude')
+        mean_wave = np.mean(cluster_data, axis=0)
+        std_wave = np.std(cluster_data, axis=0)
+        plt.plot(mean_wave, color='black', linewidth=2, label='Avg. Waveform')
+        plt.legend(loc='lower right')
+        plt.show()
+        spike_list=np.array(spike_list)
+        ul=spike_list[labels==-1]
+        final_data.append(ul)
+        plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
+        plt.title(f'ISI: Cluster {0} \n numerosity: {len(final_data[0])}, \n firing rate: {len(final_data[0])*10000/len(data)}')
+        plt.show()
+
     else:
         silhouette_avg = silhouette_score(transformed, labels)
         num_clusters = len(np.unique(labels[labels != -1]))
         print("For", num_clusters,"clusters, the silhouette score is:", silhouette_avg)
 
-    fig = plt.figure(figsize=(4, 5))
+        fig = plt.figure(figsize=(6, 8))
 
-    # Iterate over unique cluster labels
-    for i, cluster_label in enumerate(unique_labels):
-        # Extract data points for the current cluster
-        cluster_data = cut[labels == cluster_label]
+        # Iterate over unique cluster labels
+        for i, cluster_label in enumerate(unique_labels):
+            # Extract data points for the current cluster
+            cluster_data = cut[labels == cluster_label]
+            plotting_data=cluster_data.transpose()
 
-        # Plot the individual cluster data
-        quad = math.ceil(len(unique_labels)/2)
-        plt.subplot(quad, quad, i + 1)
-        plt.plot(cluster_data.transpose(), alpha=0.5)
-        plt.title(f'Cluster {cluster_label} index {i}')
-        plt.xlabel('Time [ms]')
-        plt.ylabel('Signal Amplitude')
+            # Plot the individual cluster data
+            quad = math.ceil(len(unique_labels)/2)
+            plt.subplot(3, 1, i + 1)
+            plt.plot(plotting_data, alpha=0.5)
+            plt.title(f'Cluster {cluster_label} index {i}')
+            plt.xlabel('Time [ms]')
+            plt.ylabel('Signal Amplitude')
 
-        # Plot the average waveform
-        mean_wave = np.mean(cluster_data, axis=0)
-        std_wave = np.std(cluster_data, axis=0)
-        plt.plot(mean_wave, color='black', linewidth=2, label='Avg. Waveform')
-        plt.legend()
+            # Plot the average waveform
+            mean_wave = np.mean(cluster_data, axis=0)
+            std_wave = np.std(cluster_data, axis=0)
+            plt.plot(mean_wave, color='black', linewidth=2, label='Avg. Waveform')
+            plt.legend(loc='lower left')
 
-    plt.subplots_adjust(hspace=0.5)
-    plt.show()
-    spike_list=np.array(spike_list)
-    for i in unique_labels:
-        ul=spike_list[labels==i]
-        temporary_data.append(ul)
-        if i !=-1:
-            final_data.append(ul)
-        plt.subplot(quad, quad, i + 2)
-        plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
-        plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i+1])}, \n firing rate: {len(temporary_data[i+1])*10000/len(data)}')
-    plt.subplots_adjust(hspace=2)
-    plt.show()
+        plt.subplots_adjust(hspace=0.5)
+        plt.show()
+        spike_list=np.array(spike_list)
+        for i in unique_labels:
+            ul=spike_list[labels==i]
+            temporary_data.append(ul)
+            if i !=-1:
+                final_data.append(ul)
+            plt.subplot(3,1, i + 2)
+            plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
+            plt.title(f'ISI: Cluster {i} \n numerosity: {len(temporary_data[i+1])}, \n firing rate: {len(temporary_data[i+1])*10000/len(data)}')
+        plt.subplots_adjust(hspace=2)
+        plt.show()
     return final_data
 
 def clus(cut,clustering,spike_list,data,flag=0):
