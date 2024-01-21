@@ -23,7 +23,16 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.signal import find_peaks
 import time
 
-def spike_sorting(complete_string):
+def spike_sorting(baseline,stimulation,post):
+    neurons_BL,threshold=spike_sorting_singular(baseline,0)
+    neurons_stim,threshold0=spike_sorting_singular(stimulation,threshold)
+    neurons_post,threshold0=spike_sorting_singular(post,threshold)
+    print(len(neurons_BL),' BASELINE neurons detected and sorted')
+    print(len(neurons_stim),' during-stimulation neurons detected and sorted')
+    print(len(neurons_post),' 24hrs-after neurons detected and sorted')
+    return neurons_BL,neurons_stim,neurons_post
+
+def spike_sorting_singular(complete_string,threshold):
     #file reading:
     data = h5py.File(complete_string,'r')
     data_readings = data['Data']['Recording_0']['AnalogStream']['Stream_0']['ChannelData'][()]
@@ -50,9 +59,10 @@ def spike_sorting(complete_string):
         filt_prova[electrode] = filt_prova[electrode] - filt_ref
     prova=filt_prova
     #detection:
-    threshold=[]
-    for i,electrode in tqdm(enumerate(prova.columns)):
-        threshold.append(4*(scipy.stats.median_abs_deviation(prova[electrode].values)))
+    if threshold==0:
+        threshold=[]
+        for i,electrode in tqdm(enumerate(prova.columns)):
+            threshold.append(4*(scipy.stats.median_abs_deviation(prova[electrode].values)))            
     pos_ind=[]
     neg_ind=[]
     for i,electrode in tqdm(enumerate(prova.columns)):
@@ -71,7 +81,8 @@ def spike_sorting(complete_string):
         pos=pos_ind[i]
         neg=neg_ind[i]
         channel=prova[electrode]
-        pos_cut1,n_pos1, neg_cut1,n_neg1 = cut(pos,neg,channel,1)
+        print(electrode,':')
+        pos_cut1,n_pos1, neg_cut1,n_neg1 = cut(pos,neg,channel,1.5)
         pos_cut.append(pos_cut1)
         neg_cut.append(neg_cut1)
         n_pos.append(n_pos1)
@@ -88,7 +99,7 @@ def spike_sorting(complete_string):
     for neuron in final_data:
         neurons.append(neuron)
     print(len(neurons),' neurons detected and sorted')
-    return neurons
+    return neurons,threshold
 
 
 def new_find_all_spikes(data,threshold):
@@ -99,7 +110,7 @@ def new_find_all_spikes(data,threshold):
     pos = ind[ind_pos]
     neg = ind[ind_neg]
     firing_rate=(len(pos)+len(neg))*10000/len(data)
-    print('positive spikes',len(pos),'negative spikes',len(neg),'detected spikes:', len(pos)+len(neg), 'firing rate: ',firing_rate)
+    print('positive spikes', len(pos), 'negative spikes', len(neg), 'detected spikes:', len(pos) + len(neg), 'firing rate: {:.2f}'.format(firing_rate))
     return neg, pos
 def cut(pos,neg,data,c1):
     pre = 0.0015
@@ -144,7 +155,7 @@ def cut(pos,neg,data,c1):
     negsize=k
     neg_cut=neg_cut[0:negsize]
     firing_rate=(len(pos_new)+len(neg_new))*10000/len(data)
-    print('positive spikes removed: ',len(pos)-len(pos_new),'negative spikes removed: ',len(neg)-len(neg_new),'total spikes: ',len(pos_new)+len(neg_new),'firing rate: ',firing_rate,' Hz')
+    print('positive spikes removed', len(pos)-len(pos_new), 'negative spikes removed: ', len(neg)-len(neg_new), 'total spikes :', len(pos_new) + len(neg_new), 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return pos_cut,pos_new,neg_cut,neg_new
 def mask_cuts(cut):
     before=5 #(or 50 for 5 ms : CHECK)
@@ -350,6 +361,7 @@ def comparative_clus(cut,spike_list,data):
 
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
+    print('\n______________________________________________________________________________________________________________')
     print('Total spikes: ', estratti_norm.shape[0])
     n_comp=3
     pca = PCA(n_components=n_comp)
@@ -363,7 +375,6 @@ def comparative_clus(cut,spike_list,data):
         silhouette_avg = silhouette_score(transformed, labels)
         kmeans_score.append(silhouette_avg)
     top_clusters_kmeans = kmeans_score.index(max(kmeans_score))+2
-    print('\n______________________________________________________________________________________________________________')
     if max(kmeans_score)>=0.3:
         print("\n\n\033[1;31;47mBest cluster in the range 1 to 3: ",top_clusters_kmeans,", with a silhouette score of: ",max(kmeans_score), "\u001b[0m  \n\n")
         model = KMeans(n_clusters=top_clusters_kmeans, init='k-means++', n_init=10, max_iter=400, tol=0.00005,  verbose=0, random_state=None, copy_x=True, algorithm='lloyd')
@@ -380,7 +391,7 @@ def comparative_clus(cut,spike_list,data):
         firings[i]=len(cluster_data)*10000/len(data)
         plt.subplot(3,1, i + 1)
         plt.plot(plotting_data, alpha=0.5)  # Use alpha for transparency
-        plt.title(f'Cluster {cluster_label} \n numerosity: {len(cluster_data)}')
+        plt.title(f'Cluster {i} \n numerosity: {len(cluster_data)}')
         plt.xlabel('Time [ms]')
         plt.ylabel('Signal Amplitude')
         mean_wave = np.mean(cluster_data, axis=0)
