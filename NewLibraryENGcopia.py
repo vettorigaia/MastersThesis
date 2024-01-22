@@ -65,7 +65,7 @@ def spike_sorting(complete_string,threshold,clustering,coeff,c1):
     if threshold==0:
         threshold=[]
         for i,electrode in tqdm(enumerate(prova.columns)):
-            threshold.append(coeff*(scipy.stats.median_abs_deviation(prova[electrode].values)))            
+            threshold.append(coeff*(scipy.stats.median_abs_deviation(prova[electrode].values,scale='normal')))            
     all_ind=[]
     for i,electrode in tqdm(enumerate(prova.columns)):
         channel=prova[electrode]
