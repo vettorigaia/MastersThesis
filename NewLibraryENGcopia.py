@@ -23,16 +23,16 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.signal import find_peaks
 import time
 
-def spike_sorting(baseline,stimulation,post):
-    neurons_BL,threshold=spike_sorting_singular(baseline,0)
-    neurons_stim,threshold0=spike_sorting_singular(stimulation,threshold)
-    neurons_post,threshold0=spike_sorting_singular(post,threshold)
+def three_spike_sorting(baseline,stimulation,post,clustering):
+    neurons_BL,threshold=spike_sorting(baseline,0,clustering)
+    neurons_stim,threshold0=spike_sorting(stimulation,threshold,clustering)
+    neurons_post,threshold0=spike_sorting(post,threshold,clustering)
     print(len(neurons_BL),' BASELINE neurons detected and sorted')
     print(len(neurons_stim),' during-stimulation neurons detected and sorted')
     print(len(neurons_post),' 24hrs-after neurons detected and sorted')
     return neurons_BL,neurons_stim,neurons_post
 
-def spike_sorting_singular(complete_string,threshold):
+def spike_sorting(complete_string,threshold,clustering,coeff,c1):
     #file reading:
     data = h5py.File(complete_string,'r')
     data_readings = data['Data']['Recording_0']['AnalogStream']['Stream_0']['ChannelData'][()]
@@ -43,6 +43,78 @@ def spike_sorting_singular(complete_string,threshold):
     fs = 10000 #Sampling Frequency
     print('data shape: ',readings.shape)
     prova=readings.drop([b'Ref'],axis=1)
+    #prova=prova.iloc[inizio:fine, :10]
+    prova=prova.iloc[:, :10]
+    ref=readings[b'Ref']
+    #ref=ref[inizio:fine]
+    #filtering:
+    prova_rows = range(prova.shape[0])
+    filt_prova = pd.DataFrame(data = 0, columns=prova.columns, index=prova_rows, dtype = "float32")
+    lowcut = 300
+    highcut = 3000
+    fs=10000
+    order=8
+    b,a=butter_bandpass(lowcut,highcut,fs,order=order)
+    filt_ref=filtfilt(b,a,ref)
+    for x in tqdm(range(prova.shape[1])):
+        filt_prova.values[:,x] = scipy.signal.filtfilt(b, a, prova.values[:,x])
+    for electrode in prova.columns:
+        filt_prova[electrode] = filt_prova[electrode] - filt_ref
+    prova=filt_prova
+    #detection:
+    if threshold==0:
+        threshold=[]
+        for i,electrode in tqdm(enumerate(prova.columns)):
+            threshold.append(coeff*(scipy.stats.median_abs_deviation(prova[electrode].values)))            
+    all_ind=[]
+    for i,electrode in tqdm(enumerate(prova.columns)):
+        channel=prova[electrode]
+        thresh=threshold[i]
+        ind=find_all_spikes(channel,thresh)
+        all_ind.append(ind)
+    #spike extraction:
+    cut_outs=[]
+    all_new=[]
+    pos_cut=[]
+    neg_cut=[]
+    n_pos=[]
+    n_neg=[]
+    for i,electrode in enumerate(tqdm(prova.columns)):
+        ind=all_ind[i]
+        channel=prova[electrode]
+        cut_outs1,all_new1=cut_all(ind,channel,c1)
+        cut_outs.append(cut_outs1)
+        all_new.append(all_new1)    
+    # Clustering:
+    final_data=[]
+    if clustering=='kmeans':
+            for channel in (tqdm(range(len(cut_outs)))):
+                channel_clusters1=comparative_clus(cut_outs[channel],all_new[channel],prova.iloc[:,channel])
+                final_data.append(channel_clusters1)
+    elif clustering=='dbscan':
+            for channel in (tqdm(range(len(cut_outs)))):
+                eps=int(scipy.stats.median_abs_deviation(prova.iloc[:,channel])/2)
+                channel_clusters1=dbscan_clustering(cut_outs[channel],all_new[channel],prova.iloc[:,channel],eps)
+                final_data.append(channel_clusters1)
+    neurons=[]
+    for neuron in final_data:
+        neurons.append(neuron)
+    print(len(neurons),' neurons detected and sorted')
+    return neurons,threshold
+
+
+def spike_sorting_separate(complete_string,threshold,clustering,coeff,c1):
+    #file reading:
+    data = h5py.File(complete_string,'r')
+    data_readings = data['Data']['Recording_0']['AnalogStream']['Stream_0']['ChannelData'][()]
+    info = data['Data']['Recording_0']['AnalogStream']['Stream_0']['InfoChannel'][()]
+    info_table = pd.DataFrame(info, columns = list(info.dtype.fields.keys()))
+    labels = info_table['Label']
+    readings = pd.DataFrame(data = data_readings.transpose(), columns = labels)
+    fs = 10000 #Sampling Frequency
+    print('data shape: ',readings.shape)
+    prova=readings.drop([b'Ref'],axis=1)
+    prova=prova.iloc[:, :10]
     ref=readings[b'Ref']
     #filtering:
     prova_rows = range(prova.shape[0])
@@ -62,7 +134,7 @@ def spike_sorting_singular(complete_string,threshold):
     if threshold==0:
         threshold=[]
         for i,electrode in tqdm(enumerate(prova.columns)):
-            threshold.append(4*(scipy.stats.median_abs_deviation(prova[electrode].values)))            
+            threshold.append(coeff*(scipy.stats.median_abs_deviation(prova[electrode].values)))            
     pos_ind=[]
     neg_ind=[]
     for i,electrode in tqdm(enumerate(prova.columns)):
@@ -82,7 +154,7 @@ def spike_sorting_singular(complete_string,threshold):
         neg=neg_ind[i]
         channel=prova[electrode]
         print(electrode,':')
-        pos_cut1,n_pos1, neg_cut1,n_neg1 = cut(pos,neg,channel,1.5)
+        pos_cut1,n_pos1, neg_cut1,n_neg1 = cut(pos,neg,channel,c1)
         pos_cut.append(pos_cut1)
         neg_cut.append(neg_cut1)
         n_pos.append(n_pos1)
@@ -91,10 +163,15 @@ def spike_sorting_singular(complete_string,threshold):
     # Clustering:
     final_data=[]
     for channel in (tqdm(range(len(pos_cut)))):
-        channel_clusters=comparative_clus(pos_cut[channel],n_pos[channel],prova.iloc[:,channel])
-        final_data.append(channel_clusters)
-        channel_clusters=comparative_clus(neg_cut[channel],n_neg[channel],prova.iloc[:,channel])
-        final_data.append(channel_clusters)
+        if clustering=='kmeans':
+            channel_clusters1=comparative_clus(pos_cut[channel],n_pos[channel],prova.iloc[:,channel])
+            channel_clusters2=comparative_clus(neg_cut[channel],n_neg[channel],prova.iloc[:,channel])
+        elif clustering=='dbscan':
+            eps=int(scipy.stats.median_abs_deviation(prova.iloc[:,channel])/2)
+            channel_clusters1=dbscan_clustering(pos_cut[channel],n_pos[channel],prova.iloc[:,channel],eps)
+            channel_clusters2=dbscan_clustering(neg_cut[channel],n_neg[channel],prova.iloc[:,channel,eps])
+        final_data.append(channel_clusters1)
+        final_data.append(channel_clusters2)
     neurons=[]
     for neuron in final_data:
         neurons.append(neuron)
@@ -111,7 +188,7 @@ def new_find_all_spikes(data,threshold):
     neg = ind[ind_neg]
     firing_rate=(len(pos)+len(neg))*10000/len(data)
     print('positive spikes', len(pos), 'negative spikes', len(neg), 'detected spikes:', len(pos) + len(neg), 'firing rate: {:.2f}'.format(firing_rate))
-    return neg, pos
+    return pos, neg
 def cut(pos,neg,data,c1):
     pre = 0.0015
     post = 0.0015
@@ -349,16 +426,10 @@ def bounded_clus(n_comp,n_min,n_tries,cut,clustering,spike_list,data):
 
 def comparative_clus(cut,spike_list,data):
     from sklearn.cluster import KMeans
-    from sklearn.cluster import DBSCAN, HDBSCAN
     from sklearn.preprocessing import StandardScaler
     from sklearn.decomposition import PCA
-    from sklearn import metrics
     from sklearn.metrics import silhouette_score
-    from scipy.stats import kurtosis
-    import skfuzzy as fuzz
     import numpy as np
-    import math
-
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
     print('\n______________________________________________________________________________________________________________')
@@ -387,10 +458,10 @@ def comparative_clus(cut,spike_list,data):
     fig = plt.figure(figsize=(6, 8))
     for i, cluster_label in enumerate(unique_labels):
         cluster_data = cut[labels == cluster_label]
-        plotting_data=cluster_data.transpose()
+        #plotting_data=cluster_data.transpose()
         firings[i]=len(cluster_data)*10000/len(data)
         plt.subplot(3,1, i + 1)
-        plt.plot(plotting_data, alpha=0.5)  # Use alpha for transparency
+        #plt.plot(plotting_data, alpha=0.5)  # Use alpha for transparency
         plt.title(f'Cluster {i} \n numerosity: {len(cluster_data)}')
         plt.xlabel('Time [ms]')
         plt.ylabel('Signal Amplitude')
@@ -412,7 +483,7 @@ def find_all_spikes(data,thresh):
     spike_length=30 #3ms
     ind, peaks_amp = scipy.signal.find_peaks(abs(data), height=thresh, distance= spike_length)
     firing_rate=(len(ind)*10000)/len(data)
-    print('all spikes',len(ind), 'firing rate: ',firing_rate)
+    print('all spikes',len(ind), 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return ind
 
 def old_find_all_spikes(data,thresh):
@@ -423,14 +494,11 @@ def old_find_all_spikes(data,thresh):
     pbar = tqdm(total = len(data)-window_size)
     i=0
     i_bf=0
-    #mad=scipy.stats.median_abs_deviation(data)
-    #thresh=3*mad
     while i <len(data)-window_size-11:
         window=data[i:i+window_size]
         neg_window=neg_data[i:i+window_size]
-        #mad=scipy.stats.median_abs_deviation(window)
-        #mad=scipy.stats.median_abs_deviation(data)
-        #thresh=3*mad
+        mad=scipy.stats.median_abs_deviation(window)
+        thresh=3*mad
         pos_peaks=find_peaks(window.ravel(),height=float(thresh))
         neg_peaks=find_peaks(neg_window.ravel(),height=float(thresh))
         lp=len(pos_peaks[0])
@@ -483,11 +551,12 @@ def cut_all(all,data,c1):
                 k += 1
     size=k
     cut=cut[0:size]
-    print('spikes removed: ',len(all)-len(all_new))
+    firing_rate=len(all_new)*10000/len(data)
+    print('spikes removed: ',len(all)-len(all_new),'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return cut,all_new
 
-def hdbscan_clustering(n_comp,cut,spike_list,data,mcs,ms,eps,mxcs,ls):
-    from sklearn.cluster import HDBSCAN
+def dbscan_clustering(cut,spike_list,data,eps0):
+    from sklearn.cluster import DBSCAN
     from sklearn.preprocessing import StandardScaler
     from sklearn.decomposition import PCA
     from sklearn.metrics import silhouette_score
@@ -497,13 +566,12 @@ def hdbscan_clustering(n_comp,cut,spike_list,data,mcs,ms,eps,mxcs,ls):
     scale = StandardScaler()
     estratti_norm = scale.fit_transform(cut)
     print('Total spikes: ', estratti_norm.shape[0])
-    #n_comp=10
+    n_comp=3
     pca = PCA(n_components=n_comp)
     transformed = pca.fit_transform(estratti_norm)
     #transformed=cut
-
-    hdbscan = HDBSCAN(min_cluster_size=mcs, min_samples=ms, cluster_selection_epsilon=eps, max_cluster_size=mxcs, metric='euclidean', metric_params=None, alpha=1.0, algorithm='auto', leaf_size=ls, n_jobs=None, cluster_selection_method='eom', allow_single_cluster=False, store_centers=None, copy=False)
-    labels = hdbscan.fit_predict(transformed)
+    dbscan = DBSCAN(min_samples=15, eps=eps0, metric='euclidean', metric_params=None, algorithm='auto', leaf_size=30, n_jobs=None)
+    labels = dbscan.fit_predict(transformed)
 
 
     final_data=[]
@@ -512,7 +580,8 @@ def hdbscan_clustering(n_comp,cut,spike_list,data,mcs,ms,eps,mxcs,ls):
     print('labels: ',unique_labels)
 
     if len(unique_labels) == 1:
-        print("HDBSCAN assigned only one cluster.")
+        print("DBSCAN assigned only one cluster.")
+        
         cluster_data=cut
         fig = plt.figure(figsize=(4, 5))
         plt.plot(cluster_data.transpose(), alpha=0.5)
@@ -530,6 +599,7 @@ def hdbscan_clustering(n_comp,cut,spike_list,data,mcs,ms,eps,mxcs,ls):
         plt.hist(np.diff(ul), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
         plt.title(f'ISI: Cluster {0} \n numerosity: {len(final_data[0])}, \n firing rate: {len(final_data[0])*10000/len(data)}')
         plt.show()
+        
 
     else:
         silhouette_avg = silhouette_score(transformed, labels)
