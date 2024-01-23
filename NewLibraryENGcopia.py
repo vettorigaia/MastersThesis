@@ -1,5 +1,7 @@
 #SORTING Ver2
 from tqdm.notebook import tqdm
+import numpy as np
+import pandas as pd
 import sklearn.preprocessing as ps
 from sklearn.preprocessing import StandardScaler
 from random import randint
@@ -13,8 +15,6 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import seaborn as sns
 import h5py
-import numpy as np
-import pandas as pd
 import scipy
 import pywt
 #from tqdm import tqdm
@@ -75,10 +75,6 @@ def spike_sorting(complete_string,threshold,clustering,coeff,c1):
     #spike extraction:
     cut_outs=[]
     all_new=[]
-    pos_cut=[]
-    neg_cut=[]
-    n_pos=[]
-    n_neg=[]
     for i,electrode in enumerate(tqdm(prova.columns)):
         ind=all_ind[i]
         channel=prova[electrode]
@@ -89,7 +85,8 @@ def spike_sorting(complete_string,threshold,clustering,coeff,c1):
     final_data=[]
     if clustering=='kmeans':
             for channel in (tqdm(range(len(cut_outs)))):
-                channel_clusters1=comparative_clus(cut_outs[channel],all_new[channel],prova.iloc[:,channel])
+                #channel_clusters1=comparative_clus(cut_outs[channel],all_new[channel],prova.iloc[:,channel])
+                channel_clusters1=clus(cut_outs[channel],all_new[channel],prova.iloc[:,channel])
                 final_data.append(channel_clusters1)
     elif clustering=='dbscan':
             for channel in (tqdm(range(len(cut_outs)))):
@@ -424,6 +421,69 @@ def bounded_clus(n_comp,n_min,n_tries,cut,clustering,spike_list,data):
     del(unique_labels)
     return final_data
 
+def clus(cut,spike_list,data):
+    from sklearn.cluster import KMeans
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+    from sklearn.metrics import silhouette_score
+    import numpy as np
+    scale = StandardScaler()
+    estratti_norm = scale.fit_transform(cut)
+    print('\n______________________________________________________________________________________________________________')
+    print('Total spikes: ', estratti_norm.shape[0])
+    n_comp=3
+    pca = PCA(n_components=n_comp)
+    transformed = pca.fit_transform(estratti_norm)
+    spike_list=np.array(spike_list)
+    kmeans_score=[]
+    final_data=[]
+    for n in range (2,4):
+        model = KMeans(n_clusters=n, init='k-means++', n_init=10, max_iter=400, tol=0.25, verbose=0, random_state=None, copy_x=True,  algorithm='lloyd')
+        labels = model.fit_predict(transformed)
+        silhouette_avg = silhouette_score(transformed, labels)
+        kmeans_score.append(silhouette_avg)
+    top_clusters_kmeans = kmeans_score.index(max(kmeans_score))+2
+    if max(kmeans_score)>=0.4:
+        print("\n\n\033[1;31;47mBest cluster in the range 1 to 3: ",top_clusters_kmeans,", with a silhouette score of: ",max(kmeans_score), "\u001b[0m  \n\n")
+        model = KMeans(n_clusters=top_clusters_kmeans,  init='k-means++', n_init=10, max_iter=400, tol=0.25, verbose=0, random_state=None, copy_x=True,  algorithm='lloyd')
+        labels = model.fit_predict(transformed)
+    else:
+        print('Clustering algorithm detected only one cluster')
+        labels=np.zeros(len(spike_list))
+    unique_labels=np.unique(labels)
+    firings=np.zeros(len(unique_labels))
+    for i,cluster_label in enumerate(unique_labels):
+        cluster_data=cut[labels==cluster_label]
+        mean_wave=np.mean(cluster_data, axis=0)
+        std_wave=np.std(cluster_data, axis=0)
+        distances=np.abs(cluster_data - mean_wave)
+        distance_threshold=4*std_wave
+        indices_to_keep=np.all(distances<=distance_threshold,axis=1)
+        filtered_cluster_data=cluster_data[indices_to_keep]
+        plotting_data=filtered_cluster_data.transpose()
+        firings[i]=len(filtered_cluster_data)*10000/len(data)
+        plt.subplot(3,1,i+1)
+        plt.plot(plotting_data,alpha=0.5)
+        plt.title(f'Cluster {i} \n numerosity: {len(filtered_cluster_data)}')
+        plt.xlabel=('Time [ms]')
+        plt.ylabel('Signal Amplitude')
+        mean_wave = np.mean(filtered_cluster_data, axis=0)
+        std_wave = np.std(filtered_cluster_data, axis=0)
+        plt.errorbar(range(mean_wave.shape[0]), mean_wave, yerr=std_wave, color='black', linewidth=2, label='Avg. Waveform')
+        plt.legend(loc='lower right')
+        plt.show()
+        ul=spike_list[labels==i]
+        ull=ul[indices_to_keep]
+        final_data.append(ull)
+        plt.subplot(3, 1, i + 1)
+        plt.hist(np.diff(ull), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
+        plt.title(f'ISI: Cluster {i}, \n firing rate: {format(len(final_data[i])*10000/len(data), ".2f")} Hz')
+        plt.show()
+    return final_data
+
+
+
+
 def comparative_clus(cut,spike_list,data):
     from sklearn.cluster import KMeans
     from sklearn.preprocessing import StandardScaler
@@ -446,9 +506,9 @@ def comparative_clus(cut,spike_list,data):
         silhouette_avg = silhouette_score(transformed, labels)
         kmeans_score.append(silhouette_avg)
     top_clusters_kmeans = kmeans_score.index(max(kmeans_score))+2
-    if max(kmeans_score)>=0.3:
+    if max(kmeans_score)>=0.2:
         print("\n\n\033[1;31;47mBest cluster in the range 1 to 3: ",top_clusters_kmeans,", with a silhouette score of: ",max(kmeans_score), "\u001b[0m  \n\n")
-        model = KMeans(n_clusters=top_clusters_kmeans, init='k-means++', n_init=10, max_iter=400, tol=0.00005,  verbose=0, random_state=None, copy_x=True, algorithm='lloyd')
+        model = KMeans(n_clusters=top_clusters_kmeans, init='k-means++', n_init=10, max_iter=400, tol=0.25,  verbose=0, random_state=None, copy_x=True, algorithm='lloyd')
         labels = model.fit_predict(transformed)
     else:
         print('Clustering algorithm detected only one cluster')
@@ -458,10 +518,10 @@ def comparative_clus(cut,spike_list,data):
     fig = plt.figure(figsize=(6, 8))
     for i, cluster_label in enumerate(unique_labels):
         cluster_data = cut[labels == cluster_label]
-        #plotting_data=cluster_data.transpose()
+        plotting_data=cluster_data.transpose()
         firings[i]=len(cluster_data)*10000/len(data)
         plt.subplot(3,1, i + 1)
-        #plt.plot(plotting_data, alpha=0.5)  # Use alpha for transparency
+        plt.plot(plotting_data, alpha=0.5)  # Use alpha for transparency
         plt.title(f'Cluster {i} \n numerosity: {len(cluster_data)}')
         plt.xlabel('Time [ms]')
         plt.ylabel('Signal Amplitude')
@@ -483,7 +543,7 @@ def find_all_spikes(data,thresh):
     spike_length=30 #3ms
     ind, peaks_amp = scipy.signal.find_peaks(abs(data), height=thresh, distance= spike_length)
     firing_rate=(len(ind)*10000)/len(data)
-    print('all spikes',len(ind), 'firing rate: {:.2f}'.format(firing_rate),'Hz')
+    print(len(ind), ' spikes detected;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return ind
 
 def old_find_all_spikes(data,thresh):
@@ -552,7 +612,7 @@ def cut_all(all,data,c1):
     size=k
     cut=cut[0:size]
     firing_rate=len(all_new)*10000/len(data)
-    print('spikes removed: ',len(all)-len(all_new),'firing rate: {:.2f}'.format(firing_rate),'Hz')
+    print(len(all)-len(all_new),' spikes removed;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return cut,all_new
 
 def dbscan_clustering(cut,spike_list,data,eps0):
@@ -643,7 +703,7 @@ def dbscan_clustering(cut,spike_list,data,eps0):
         plt.show()
     return final_data
 
-def clus(cut,clustering,spike_list,data,flag=0):
+def old_clus(cut,clustering,spike_list,data,flag=0):
     from sklearn.cluster import KMeans
     from sklearn.cluster import DBSCAN, HDBSCAN
     from sklearn.preprocessing import StandardScaler
