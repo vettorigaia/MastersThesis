@@ -32,7 +32,7 @@ def three_spike_sorting(baseline,stimulation,post,clustering):
     print(len(neurons_post),' 24hrs-after neurons detected and sorted')
     return neurons_BL,neurons_stim,neurons_post
 
-def spike_sorting(complete_string,threshold,clustering,coeff,c1):
+def spike_sorting(name_data,complete_string,threshold,clustering,coeff,c1):
     #file reading:
     data = h5py.File(complete_string,'r')
     data_readings = data['Data']['Recording_0']['AnalogStream']['Stream_0']['ChannelData'][()]
@@ -94,10 +94,26 @@ def spike_sorting(complete_string,threshold,clustering,coeff,c1):
                 channel_clusters1=dbscan_clustering(cut_outs[channel],all_new[channel],prova.iloc[:,channel],eps)
                 final_data.append(channel_clusters1)
     neurons=[]
-    for neuron in final_data:
-        neurons.append(neuron)
+    for channel in final_data:
+        for neuron in channel:
+            neurons.append(neuron)
     print(len(neurons),' neurons detected and sorted')
-    return neurons,threshold
+    adj_neur=[]
+    counter = 0
+    max_len=0
+    for neuron in neurons:
+        print('counter: ',counter,neuron.shape[0])
+        if neuron.shape[0]>max_len:
+            max_len=neuron.shape[0]
+        counter+=1
+    for neuron in neurons:
+        if neuron.shape[0]<max_len and neuron.shape[0]>=1000:
+            diff = max_len-neuron.shape[0]
+            adj_neur.append(np.concatenate((neuron,np.zeros([diff]))))
+    save_data = 'After'+name_data+'.txt'
+    np.savetxt("/Users/Gaia_1/Desktop/tesi/Data after SS/%s.txt" % save_data,adj_neur, delimiter=', ', fmt='%12.8f')
+    print(save_data)
+    return neurons
 
 
 def spike_sorting_separate(complete_string,threshold,clustering,coeff,c1):
