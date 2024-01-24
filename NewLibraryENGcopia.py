@@ -25,8 +25,9 @@ import time
 
 
 
-def spike_sorting(name_data,complete_string,threshold,clustering,coeff,c1):
+def spike_sorting(name_data,complete_string,abso,coeff,c1):
     #file reading:
+    print('File Reading...')
     data = h5py.File(complete_string,'r')
     data_readings = data['Data']['Recording_0']['AnalogStream']['Stream_0']['ChannelData'][()]
     info = data['Data']['Recording_0']['AnalogStream']['Stream_0']['InfoChannel'][()]
@@ -37,7 +38,7 @@ def spike_sorting(name_data,complete_string,threshold,clustering,coeff,c1):
     print('data shape: ',readings.shape)
     prova=readings.drop([b'Ref'],axis=1)
     #prova=prova.iloc[inizio:fine, :10]
-    #prova=prova.iloc[:, :10]
+    prova=prova.iloc[:, :15]
     ref=readings[b'Ref']
     #ref=ref[inizio:fine]
     #filtering:
@@ -49,23 +50,18 @@ def spike_sorting(name_data,complete_string,threshold,clustering,coeff,c1):
     order=8
     b,a=butter_bandpass(lowcut,highcut,fs,order=order)
     filt_ref=filtfilt(b,a,ref)
+    print('Data Filtering:')
     for x in tqdm(range(prova.shape[1])):
         filt_prova.values[:,x] = scipy.signal.filtfilt(b, a, prova.values[:,x])
     for electrode in prova.columns:
         filt_prova[electrode] = filt_prova[electrode] - filt_ref
     prova=filt_prova
     #detection:
-    #if threshold==0:
-    #    threshold=[]
-    #    for i,electrode in enumerate(tqdm(prova.columns)):
-    #        threshold.append(coeff*(scipy.stats.median_abs_deviation(prova[electrode].values,scale='normal')))
     all_ind=[]
     print('Spike Detection: ')
     for i,electrode in enumerate(tqdm(prova.columns)):
         channel=prova[electrode]
-        #thresh=threshold[i]
-        #ind=find_all_spikes(channel,thresh)
-        ind=windowed_spike_detection(channel,coeff)
+        ind=windowed_spike_detection(channel,coeff,abso)
         all_ind.append(ind)
     #spike extraction:
     cut_outs=[]
@@ -79,16 +75,11 @@ def spike_sorting(name_data,complete_string,threshold,clustering,coeff,c1):
         all_new.append(all_new1)    
     # Clustering:
     final_data=[]
-    if clustering=='kmeans':
-            for channel in (tqdm(range(len(cut_outs)))):
-                #channel_clusters1=comparative_clus(cut_outs[channel],all_new[channel],prova.iloc[:,channel])
-                channel_clusters1=clus(cut_outs[channel],all_new[channel],prova.iloc[:,channel])
-                final_data.append(channel_clusters1)
-    elif clustering=='dbscan':
-            for channel in (tqdm(range(len(cut_outs)))):
-                eps=int(scipy.stats.median_abs_deviation(prova.iloc[:,channel])/2)
-                channel_clusters1=dbscan_clustering(cut_outs[channel],all_new[channel],prova.iloc[:,channel],eps)
-                final_data.append(channel_clusters1)
+    print('Clustering: ')
+    for channel in (tqdm(range(len(cut_outs)))):
+        #channel_clusters1=comparative_clus(cut_outs[channel],all_new[channel],prova.iloc[:,channel])
+        channel_clusters1=clus(cut_outs[channel],all_new[channel],prova.iloc[:,channel])
+        final_data.append(channel_clusters1)
     neurons=[]
     for channel in final_data:
         for neuron in channel:
@@ -141,12 +132,8 @@ def poiproc(neurons,target,stim):
         dataframe = pd.concat([dataframe,df],axis = 1)
     print('Final number of neurons: ',counter)
     print('Target = ',target)
+    #ks_2samp(lista_samples,ISI_healthy,mode = 'asymp')
     return dataframe
-
-
-
-    ks_2samp(lista_samples,ISI_healthy,mode = 'asymp')
-
 
 def cut_all(all,data,c1):
     pre = 0.0015
@@ -173,7 +160,7 @@ def cut_all(all,data,c1):
     size=k
     cut=cut[0:size]
     firing_rate=len(all_new)*10000/len(data)
-    #print(len(all)-len(all_new),' spikes removed;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
+    print(len(all)-len(all_new),' spikes removed;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return cut,all_new
 def find_all_spikes(data,thresh):
     spike_length=30 #3ms
@@ -181,7 +168,7 @@ def find_all_spikes(data,thresh):
     firing_rate=(len(ind)*10000)/len(data)
     #print(len(ind), ' spikes detected;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return ind
-def windowed_spike_detection(data,coeff):
+def windowed_spike_detection(data,coeff,abso):
     spike_length=30 #3ms
     window_length=10000 #1 sec
     abs_data=abs(data)
@@ -190,7 +177,10 @@ def windowed_spike_detection(data,coeff):
     while i < len(data)+window_length:
         abs_window=abs_data[i:i+window_length]
         window=data[i:i+window_length]
-        thresh=coeff*(scipy.stats.median_abs_deviation(window,scale='normal'))
+        if abso==0:
+            thresh=coeff*(scipy.stats.median_abs_deviation(window,scale='normal'))
+        else:
+            thresh=coeff*(scipy.stats.median_abs_deviation(abs_window,scale='normal'))
         ind1, peaks =find_peaks(abs_window, height=thresh,distance=spike_length)
         last=i
         if len(ind1):
@@ -229,9 +219,12 @@ def clus(cut,spike_list,data):
         labels = model.fit_predict(transformed)
     else:
         print('Clustering algorithm detected only one cluster')
-        labels=np.zeros(len(spike_list))
+        labels=np.zeros(len(spike_list),dtype=int)
     unique_labels=np.unique(labels)
     firings=np.zeros(len(unique_labels))
+    color=[]
+    for i in labels:
+        color.append(plt.rcParams['axes.prop_cycle'].by_key()['color'][i])
     for i,cluster_label in enumerate(unique_labels):
         cluster_data=cut[labels==cluster_label]
         mean_wave=np.mean(cluster_data, axis=0)
@@ -245,7 +238,7 @@ def clus(cut,spike_list,data):
         plt.subplot(3,1,i+1)
         plt.plot(plotting_data,alpha=0.5)
         plt.title(f'Cluster {i} \n numerosity: {len(filtered_cluster_data)}')
-        plt.xlabel=('Time [ms]')
+        plt.xlabel('Time [ms]')
         plt.ylabel('Signal Amplitude')
         mean_wave = np.mean(filtered_cluster_data, axis=0)
         std_wave = np.std(filtered_cluster_data, axis=0)
@@ -259,6 +252,19 @@ def clus(cut,spike_list,data):
         plt.hist(np.diff(ull), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
         plt.title(f'ISI: Cluster {i}, \n firing rate: {format(len(final_data[i])*10000/len(data), ".2f")} Hz')
         plt.show()
+    if len(unique_labels)>10:
+        fig = plt.figure(figsize=(18,8))
+        for i,cluster_label in enumerate(unique_labels):       
+            ax = fig.add_subplot(1, 2, 1, projection='3d')
+            ax.scatter(transformed[:,0], transformed[:,1], transformed[:,2], c=color, alpha=0.8, s=10, marker='.')
+            ax = fig.add_subplot(1, 2, 2)
+            color = plt.rcParams['axes.prop_cycle'].by_key()['color'][i]
+            ax.errorbar(range(mean_wave.shape[0]),mean_wave,yerr = std_wave)
+
+        plt.xlabel('Time [0.1ms]')
+        plt.ylabel('Voltage [\u03BCV]')
+        plt.show()    
+
     return final_data
 
 ################################POINT PROCESS
@@ -309,7 +315,7 @@ def Bayesian_mixture_model(ISI_data):
 
 
 
-
+'''
 def comparative_clus(cut,spike_list,data):
     from sklearn.cluster import KMeans
     from sklearn.preprocessing import StandardScaler
@@ -1133,7 +1139,7 @@ def old_cut(pos,neg,data,c1):
     firing_rate=(len(pos_new)+len(neg_new))*10000/len(data)
     print('positive spikes removed', len(pos)-len(pos_new), 'negative spikes removed: ', len(neg)-len(neg_new), 'total spikes :', len(pos_new) + len(neg_new), 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return pos_cut,pos_new,neg_cut,neg_new
-
+'''
 
 #____________________________________________________________________________________FILT BUTTERWORTH_________________________________
 
