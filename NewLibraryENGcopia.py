@@ -37,7 +37,7 @@ def spike_sorting(name_data,complete_string,threshold,clustering,coeff,c1):
     print('data shape: ',readings.shape)
     prova=readings.drop([b'Ref'],axis=1)
     #prova=prova.iloc[inizio:fine, :10]
-    prova=prova.iloc[:, :10]
+    #prova=prova.iloc[:, :10]
     ref=readings[b'Ref']
     #ref=ref[inizio:fine]
     #filtering:
@@ -55,19 +55,22 @@ def spike_sorting(name_data,complete_string,threshold,clustering,coeff,c1):
         filt_prova[electrode] = filt_prova[electrode] - filt_ref
     prova=filt_prova
     #detection:
-    if threshold==0:
-        threshold=[]
-        for i,electrode in enumerate(tqdm(prova.columns)):
-            threshold.append(coeff*(scipy.stats.median_abs_deviation(prova[electrode].values,scale='normal')))            
+    #if threshold==0:
+    #    threshold=[]
+    #    for i,electrode in enumerate(tqdm(prova.columns)):
+    #        threshold.append(coeff*(scipy.stats.median_abs_deviation(prova[electrode].values,scale='normal')))
     all_ind=[]
+    print('Spike Detection: ')
     for i,electrode in enumerate(tqdm(prova.columns)):
         channel=prova[electrode]
-        thresh=threshold[i]
-        ind=find_all_spikes(channel,thresh)
+        #thresh=threshold[i]
+        #ind=find_all_spikes(channel,thresh)
+        ind=windowed_spike_detection(channel,coeff)
         all_ind.append(ind)
     #spike extraction:
     cut_outs=[]
     all_new=[]
+    print('Spike extraction: ')
     for i,electrode in enumerate(tqdm(prova.columns)):
         ind=all_ind[i]
         channel=prova[electrode]
@@ -170,14 +173,34 @@ def cut_all(all,data,c1):
     size=k
     cut=cut[0:size]
     firing_rate=len(all_new)*10000/len(data)
-    print(len(all)-len(all_new),' spikes removed;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
+    #print(len(all)-len(all_new),' spikes removed;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return cut,all_new
 def find_all_spikes(data,thresh):
     spike_length=30 #3ms
     ind, peaks_amp = scipy.signal.find_peaks(abs(data), height=thresh, distance= spike_length)
     firing_rate=(len(ind)*10000)/len(data)
+    #print(len(ind), ' spikes detected;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
+    return ind
+def windowed_spike_detection(data,coeff):
+    spike_length=30 #3ms
+    window_length=10000 #1 sec
+    abs_data=abs(data)
+    i=0
+    ind=[]
+    while i < len(data)+window_length:
+        abs_window=abs_data[i:i+window_length]
+        window=data[i:i+window_length]
+        thresh=coeff*(scipy.stats.median_abs_deviation(window,scale='normal'))
+        ind1, peaks =find_peaks(abs_window, height=thresh,distance=spike_length)
+        last=i
+        if len(ind1):
+            last=i+ind1[-1]
+        ind.extend([index + i for index in ind1])
+        i=last+spike_length
+    firing_rate=len(ind)*10000/len(data)
     print(len(ind), ' spikes detected;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return ind
+
 def clus(cut,spike_list,data):
     from sklearn.cluster import KMeans
     from sklearn.preprocessing import StandardScaler
@@ -214,7 +237,7 @@ def clus(cut,spike_list,data):
         mean_wave=np.mean(cluster_data, axis=0)
         std_wave=np.std(cluster_data, axis=0)
         distances=np.abs(cluster_data - mean_wave)
-        distance_threshold=4*std_wave
+        distance_threshold=3*std_wave
         indices_to_keep=np.all(distances<=distance_threshold,axis=1)
         filtered_cluster_data=cluster_data[indices_to_keep]
         plotting_data=filtered_cluster_data.transpose()
