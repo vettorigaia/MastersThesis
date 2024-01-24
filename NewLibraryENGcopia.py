@@ -254,12 +254,17 @@ def clus(cut,spike_list,data):
         plt.show()
     if len(unique_labels)>10:
         fig = plt.figure(figsize=(18,8))
-        for i,cluster_label in enumerate(unique_labels):       
-            ax = fig.add_subplot(1, 2, 1, projection='3d')
-            ax.scatter(transformed[:,0], transformed[:,1], transformed[:,2], c=color, alpha=0.8, s=10, marker='.')
-            ax = fig.add_subplot(1, 2, 2)
+        ax = fig.add_subplot(1, 2, 1, projection='3d')
+        ax.scatter(transformed[:,0], transformed[:,1], transformed[:,2], c=color, alpha=0.8, s=10, marker='.')
+        ax = fig.add_subplot(1, 2, 2)
+        for i,cluster_label in enumerate(unique_labels):    
+            idx=cluster_label==i
             color = plt.rcParams['axes.prop_cycle'].by_key()['color'][i]
-            ax.errorbar(range(mean_wave.shape[0]),mean_wave,yerr = std_wave)
+            mean_wave = np.mean(cut[idx,:],axis = 0)
+            std_wave = np.std(cut[idx,:],axis = 0)
+            #ax.errorbar(range(cut[idx,:].shape[1]),mean_wave,yerr = std_wave)
+            plt.errorbar(range(mean_wave.shape[0]), mean_wave, yerr=std_wave, color=color)
+            #ax.errorbar(range(mean_wave.shape[0]),mean_wave,yerr = std_wave)
 
         plt.xlabel('Time [0.1ms]')
         plt.ylabel('Voltage [\u03BCV]')
