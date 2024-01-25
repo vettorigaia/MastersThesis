@@ -38,7 +38,7 @@ def spike_sorting(name_data,complete_string,abso,coeff,c1):
     print('data shape: ',readings.shape)
     prova=readings.drop([b'Ref'],axis=1)
     #prova=prova.iloc[inizio:fine, :10]
-    prova=prova.iloc[:, :15]
+    #prova=prova.iloc[:, :15]
     ref=readings[b'Ref']
     #ref=ref[inizio:fine]
     #filtering:
@@ -113,7 +113,7 @@ def poiproc(neurons,target,stim):
     list_neurons = neurons #np.genfromtxt(net, delimiter=',')
     counter=0
     print('Original number of neurons: ',len(list_neurons))
-    for neuron in list_neurons:
+    for neuron in tqdm(list_neurons):
         neuron=neuron[neuron>0*10000]
         neuron=neuron[neuron<200*10000]
         print('  Neuron with ',neuron.shape[0],'spikes')
