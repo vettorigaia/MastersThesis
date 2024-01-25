@@ -263,7 +263,7 @@ def clus(cut,spike_list,data):
             mean_wave = np.mean(cut[idx,:],axis = 0)
             std_wave = np.std(cut[idx,:],axis = 0)
             #ax.errorbar(range(cut[idx,:].shape[1]),mean_wave,yerr = std_wave)
-            plt.errorbar(range(mean_wave.shape[0]), mean_wave, yerr=std_wave, color=color)
+            plt.errorbar(range(mean_wave.shape[0]), mean_wave, yerr=std_wave, c=color)
             #ax.errorbar(range(mean_wave.shape[0]),mean_wave,yerr = std_wave)
 
         plt.xlabel('Time [0.1ms]')
