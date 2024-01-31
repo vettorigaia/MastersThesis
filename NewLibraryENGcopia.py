@@ -67,7 +67,7 @@ def spike_sorting(input_path,output_path):
     #spike extraction:
     cut_outs=[]
     all_new=[]
-    print('Spike extraction: ')
+    print('/nSpike extraction: ')
     for i,electrode in enumerate(tqdm(prova.columns)):
         ind=all_ind[i]
         channel=prova[electrode]
@@ -234,7 +234,7 @@ def clus(cut,spike_list,data):
         mean_wave=np.mean(cluster_data, axis=0)
         std_wave=np.std(cluster_data, axis=0)
         distances=np.abs(cluster_data - mean_wave)
-        distance_threshold=1.5*std_wave
+        distance_threshold=2*std_wave
         indices_to_keep=np.all(distances<=distance_threshold,axis=1)
         filtered_cluster_data=cluster_data[indices_to_keep]
         plotting_data=filtered_cluster_data.transpose()
