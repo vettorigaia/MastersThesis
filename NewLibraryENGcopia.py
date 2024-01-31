@@ -67,7 +67,7 @@ def spike_sorting(input_path,output_path):
     #spike extraction:
     cut_outs=[]
     all_new=[]
-    print('/nSpike extraction: ')
+    print('Spike extraction: ')
     for i,electrode in enumerate(tqdm(prova.columns)):
         ind=all_ind[i]
         channel=prova[electrode]
