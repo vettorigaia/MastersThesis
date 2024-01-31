@@ -127,7 +127,7 @@ def poiproc(neurons,target,stim):
             continue
         
         ISI_healthy = np.diff(neuron)/10000
-        map_estimate = Bayesian_mixture_model(ISI_healthy)
+        map_estimate = Bayesian_mixture_model(ISI_healthy,counter)
         map_estimate['Target']=target
         map_estimate['Stimulation']=stim
         df = pd.DataFrame.from_dict(map_estimate,orient='index')
@@ -135,7 +135,7 @@ def poiproc(neurons,target,stim):
     print('Final number of neurons: ',counter)
     print('Target = ',target)
     #ks_2samp(lista_samples,ISI_healthy,mode = 'asymp')
-    return dataframe
+    return dataframe,counter
 
 def cut_all(all,data):
     pre = 0.0015
@@ -277,7 +277,7 @@ def clus(cut,spike_list,data):
     return final_data
 
 ################################POINT PROCESS
-def Bayesian_mixture_model(ISI_data):
+def Bayesian_mixture_model(ISI_data,counter):
     with pm.Model() as model:
         ##### WALD DISTRIBUTION (INVERSE GAUSSIAN)
         mu1 = pm.Uniform('mu1',lower=0.01,upper=0.1)
@@ -296,8 +296,19 @@ def Bayesian_mixture_model(ISI_data):
         w = pm.Dirichlet('w', a=np.array([1., .4, .4]))
         like = pm.Mixture('like', w=w, comp_dists = [obs1, obs2, obs3], observed=ISI_data)
 
-        #step = pm.NUTS(target_accept=0.9)
-        #trace = pm.sample(step=step,draws=1000,chains=1,tune=1000,cores=4)
+        if counter==9:
+            step = pm.NUTS(target_accept=0.9)
+            trace = pm.sample(step=step,draws=1000,chains=1,tune=1000,cores=4)
+            ppc_trace = pm.sample_posterior_predictive(trace,model=model)
+            bins = np.arange(0, .5, 1e-3) 
+            plt.figure (figsize=(14,10))
+            hist = np.histogram(ppc_trace['posterior_predictive']['like'].values,bins=bins)
+            #plt.axis([-0.01,0.13,0,160])
+            a= plt.hist(ISI_data,bins)
+            plt.plot(hist[1][:-1],hist[0]/1000,linewidth=3)
+            plt.show()
+
+
         
     map_estimate = pm.find_MAP(model=model)
     
