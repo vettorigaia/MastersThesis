@@ -25,10 +25,11 @@ import time
 
 
 
-def spike_sorting(name_data,complete_string,abso,coeff,c1):
+def spike_sorting(input_path,output_path):
+    name_data = input_path.split("/")[-1]
     #file reading:
     print('File Reading...')
-    data = h5py.File(complete_string,'r')
+    data = h5py.File(input_path,'r')
     data_readings = data['Data']['Recording_0']['AnalogStream']['Stream_0']['ChannelData'][()]
     info = data['Data']['Recording_0']['AnalogStream']['Stream_0']['InfoChannel'][()]
     info_table = pd.DataFrame(info, columns = list(info.dtype.fields.keys()))
@@ -38,7 +39,7 @@ def spike_sorting(name_data,complete_string,abso,coeff,c1):
     print('data shape: ',readings.shape)
     prova=readings.drop([b'Ref'],axis=1)
     #prova=prova.iloc[inizio:fine, :10]
-    #prova=prova.iloc[:, :15]
+    prova=prova.iloc[:, :15]
     ref=readings[b'Ref']
     #ref=ref[inizio:fine]
     #filtering:
@@ -61,7 +62,7 @@ def spike_sorting(name_data,complete_string,abso,coeff,c1):
     print('Spike Detection: ')
     for i,electrode in enumerate(tqdm(prova.columns)):
         channel=prova[electrode]
-        ind=windowed_spike_detection(channel,coeff,abso)
+        ind=windowed_spike_detection(channel)
         all_ind.append(ind)
     #spike extraction:
     cut_outs=[]
@@ -70,14 +71,13 @@ def spike_sorting(name_data,complete_string,abso,coeff,c1):
     for i,electrode in enumerate(tqdm(prova.columns)):
         ind=all_ind[i]
         channel=prova[electrode]
-        cut_outs1,all_new1=cut_all(ind,channel,c1)
+        cut_outs1,all_new1=cut_all(ind,channel)
         cut_outs.append(cut_outs1)
         all_new.append(all_new1)    
     # Clustering:
     final_data=[]
     print('Clustering: ')
     for channel in (tqdm(range(len(cut_outs)))):
-        #channel_clusters1=comparative_clus(cut_outs[channel],all_new[channel],prova.iloc[:,channel])
         channel_clusters1=clus(cut_outs[channel],all_new[channel],prova.iloc[:,channel])
         final_data.append(channel_clusters1)
     neurons=[]
@@ -98,8 +98,10 @@ def spike_sorting(name_data,complete_string,abso,coeff,c1):
             diff = max_len-neuron.shape[0]
             adj_neur.append(np.concatenate((neuron,np.zeros([diff]))))
     save_data = 'After'+name_data+'.txt'
-    np.savetxt("/Users/Gaia_1/Desktop/tesi/Data after SS/%s.txt" % save_data,adj_neur, delimiter=', ', fmt='%12.8f')
-    print(save_data)
+    #np.savetxt("/Users/Gaia_1/Desktop/tesi/Data after SS/%s.txt" % save_data,adj_neur, delimiter=', ', fmt='%12.8f')
+    np.savetxt(f"{output_path}/{save_data}.txt", adj_neur, delimiter=', ', fmt='%12.8f')
+
+    print('saved: ',save_data)
     return neurons
 
 def poiproc(neurons,target,stim):
@@ -135,7 +137,7 @@ def poiproc(neurons,target,stim):
     #ks_2samp(lista_samples,ISI_healthy,mode = 'asymp')
     return dataframe
 
-def cut_all(all,data,c1):
+def cut_all(all,data):
     pre = 0.0015
     post = 0.0015
     fs=10000
@@ -145,6 +147,7 @@ def cut_all(all,data,c1):
     cut= np.empty([lunghezza_indici, prima+dopo])
     dim = data.shape[0]
     k=0
+    coeff=1.5
     signal_std=np.std(data)
     all_new=[]
     for i in all:
@@ -153,7 +156,7 @@ def cut_all(all,data,c1):
             media=(np.mean(spike))
             std=np.std(spike)
             spike_std=(spike-media)/std
-            if abs(std)<=c1*abs(signal_std):
+            if abs(std)<=coeff*abs(signal_std):
                 cut[k,:] = spike_std
                 all_new.append(i)
                 k += 1
@@ -168,7 +171,7 @@ def find_all_spikes(data,thresh):
     firing_rate=(len(ind)*10000)/len(data)
     #print(len(ind), ' spikes detected;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return ind
-def windowed_spike_detection(data,coeff,abso):
+def windowed_spike_detection(data):
     spike_length=30 #3ms
     window_length=10000 #1 sec
     abs_data=abs(data)
@@ -177,10 +180,11 @@ def windowed_spike_detection(data,coeff,abso):
     while i < len(data)+window_length:
         abs_window=abs_data[i:i+window_length]
         window=data[i:i+window_length]
-        if abso==0:
-            thresh=coeff*(scipy.stats.median_abs_deviation(window,scale='normal'))
-        else:
-            thresh=coeff*(scipy.stats.median_abs_deviation(abs_window,scale='normal'))
+        #if abso==0:
+            #thresh=coeff*(scipy.stats.median_abs_deviation(window,scale='normal'))
+        #else:
+        coeff=4
+        thresh=coeff*(scipy.stats.median_abs_deviation(abs_window,scale='normal'))
         ind1, peaks =find_peaks(abs_window, height=thresh,distance=spike_length)
         last=i
         if len(ind1):
@@ -213,7 +217,7 @@ def clus(cut,spike_list,data):
         silhouette_avg = silhouette_score(transformed, labels)
         kmeans_score.append(silhouette_avg)
     top_clusters_kmeans = kmeans_score.index(max(kmeans_score))+2
-    if max(kmeans_score)>=0.4:
+    if max(kmeans_score)>=0.45:
         print("\n\n\033[1;31;47mBest cluster in the range 1 to 3: ",top_clusters_kmeans,", with a silhouette score of: ",max(kmeans_score), "\u001b[0m  \n\n")
         model = KMeans(n_clusters=top_clusters_kmeans,  init='k-means++', n_init=10, max_iter=400, tol=0.25, verbose=0, random_state=None, copy_x=True,  algorithm='lloyd')
         labels = model.fit_predict(transformed)
@@ -230,7 +234,7 @@ def clus(cut,spike_list,data):
         mean_wave=np.mean(cluster_data, axis=0)
         std_wave=np.std(cluster_data, axis=0)
         distances=np.abs(cluster_data - mean_wave)
-        distance_threshold=3*std_wave
+        distance_threshold=2*std_wave
         indices_to_keep=np.all(distances<=distance_threshold,axis=1)
         filtered_cluster_data=cluster_data[indices_to_keep]
         plotting_data=filtered_cluster_data.transpose()
