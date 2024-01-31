@@ -135,7 +135,7 @@ def poiproc(neurons,target,stim):
     print('Final number of neurons: ',counter)
     print('Target = ',target)
     #ks_2samp(lista_samples,ISI_healthy,mode = 'asymp')
-    return dataframe,counter
+    return dataframe
 
 def cut_all(all,data):
     pre = 0.0015
@@ -217,7 +217,7 @@ def clus(cut,spike_list,data):
         silhouette_avg = silhouette_score(transformed, labels)
         kmeans_score.append(silhouette_avg)
     top_clusters_kmeans = kmeans_score.index(max(kmeans_score))+2
-    if max(kmeans_score)>=0.45:
+    if max(kmeans_score)>=0.4:
         print("\n\n\033[1;31;47mBest cluster in the range 1 to 3: ",top_clusters_kmeans,", with a silhouette score of: ",max(kmeans_score), "\u001b[0m  \n\n")
         model = KMeans(n_clusters=top_clusters_kmeans,  init='k-means++', n_init=10, max_iter=400, tol=0.25, verbose=0, random_state=None, copy_x=True,  algorithm='lloyd')
         labels = model.fit_predict(transformed)
@@ -234,7 +234,7 @@ def clus(cut,spike_list,data):
         mean_wave=np.mean(cluster_data, axis=0)
         std_wave=np.std(cluster_data, axis=0)
         distances=np.abs(cluster_data - mean_wave)
-        distance_threshold=2*std_wave
+        distance_threshold=1.5*std_wave
         indices_to_keep=np.all(distances<=distance_threshold,axis=1)
         filtered_cluster_data=cluster_data[indices_to_keep]
         plotting_data=filtered_cluster_data.transpose()
@@ -277,7 +277,8 @@ def clus(cut,spike_list,data):
     return final_data
 
 ################################POINT PROCESS
-def Bayesian_mixture_model(ISI_data,counter):
+def Bayesian_mixture_model(ISI_data):
+    import scipy.stats as st
     with pm.Model() as model:
         ##### WALD DISTRIBUTION (INVERSE GAUSSIAN)
         mu1 = pm.Uniform('mu1',lower=0.01,upper=0.1)
@@ -293,9 +294,13 @@ def Bayesian_mixture_model(ISI_data,counter):
         sigma3 = pm.Uniform('sigma3',lower=0.0001,upper=0.5)
         obs3 = pm.TruncatedNormal.dist(mu=mu3, sigma=sigma3, lower=0.0)
 
+        w1=1
+        w2=0.4
+        w3=0.4
         w = pm.Dirichlet('w', a=np.array([1., .4, .4]))
         like = pm.Mixture('like', w=w, comp_dists = [obs1, obs2, obs3], observed=ISI_data)
 
+        '''
         if counter==9:
             step = pm.NUTS(target_accept=0.9)
             trace = pm.sample(step=step,draws=1000,chains=1,tune=1000,cores=4)
@@ -307,10 +312,16 @@ def Bayesian_mixture_model(ISI_data,counter):
             a= plt.hist(ISI_data,bins)
             plt.plot(hist[1][:-1],hist[0]/1000,linewidth=3)
             plt.show()
-
-
+        '''
         
     map_estimate = pm.find_MAP(model=model)
+    d= np.linspace(0.00, 1, len(ISI_data))
+    mu1=map_estimate['mu1']
+    mu2=map_estimate['mu2']
+    mu3=map_estimate['mu3']
+    pdf = w1*st.invgauss.pdf(d, mu1/lam1, scale = lam1) + w2*st.norm.pdf(d, mu2, sigma2) + w3*st.norm.pdf(d, mu3, sigma3)
+    cdf_2gauss = lambda x: w1 * st.norm.cdf(x, mu1, sigma1) + w2 * st.norm.cdf(x, mu2, sigma2) + w3*st.invgauss.cdf(x,mu3/lam3, scale = lam3)
+    st.ks_1samp(ISI_data[ISI_data>0],  cdf_2gauss, method = 'asymp')
     
     del map_estimate['w_simplex__']
     del map_estimate['mu1_interval__']
