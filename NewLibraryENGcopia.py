@@ -39,7 +39,7 @@ def spike_sorting(input_path,output_path):
     print('data shape: ',readings.shape)
     prova=readings.drop([b'Ref'],axis=1)
     #prova=prova.iloc[inizio:fine, :10]
-    prova=prova.iloc[:, :15]
+    #prova=prova.iloc[:, :15]
     ref=readings[b'Ref']
     #ref=ref[inizio:fine]
     #filtering:
