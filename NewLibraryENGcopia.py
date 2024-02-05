@@ -22,10 +22,11 @@ from tqdm.notebook import tqdm
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.signal import find_peaks
 import time
+from scipy.signal import butter, filtfilt
 
 
 
-def spike_sorting(input_path,output_path):
+def spike_sorting(input_path,output_path,abso,coeff):
     name_data = input_path.split("/")[-1]
     #file reading:
     print('File Reading...')
@@ -38,10 +39,10 @@ def spike_sorting(input_path,output_path):
     fs = 10000 #Sampling Frequency
     print('data shape: ',readings.shape)
     prova=readings.drop([b'Ref'],axis=1)
-    #prova=prova.iloc[inizio:fine, :10]
+    #prova=prova.iloc[0:750500, :]
     #prova=prova.iloc[:, :15]
     ref=readings[b'Ref']
-    #ref=ref[inizio:fine]
+    #ref=ref[0:750500]
     #filtering:
     prova_rows = range(prova.shape[0])
     filt_prova = pd.DataFrame(data = 0, columns=prova.columns, index=prova_rows, dtype = "float32")
@@ -62,7 +63,8 @@ def spike_sorting(input_path,output_path):
     print('Spike Detection: ')
     for i,electrode in enumerate(tqdm(prova.columns)):
         channel=prova[electrode]
-        ind=windowed_spike_detection(channel)
+        #ind=windowed_spike_detection(channel)
+        ind=spike_detection(channel,abso,coeff)
         all_ind.append(ind)
     #spike extraction:
     cut_outs=[]
@@ -171,6 +173,7 @@ def find_all_spikes(data,thresh):
     firing_rate=(len(ind)*10000)/len(data)
     #print(len(ind), ' spikes detected;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return ind
+
 def windowed_spike_detection(data):
     spike_length=30 #3ms
     window_length=10000 #1 sec
@@ -194,8 +197,36 @@ def windowed_spike_detection(data):
     firing_rate=len(ind)*10000/len(data)
     print(len(ind), ' spikes detected;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return ind
+def spike_detection(data,abso,coeff):
+    spike_length=30 #3ms
+    window_length=1000 #0.1 sec (100ms)
+    neg_data=-(data)
+    abs_data=abs(data)
+    i=0
+    ind=[]
+    while i < len(data)-window_length:
+        neg_window=neg_data[i:i+window_length]
+        abs_window=abs_data[i:i+window_length]
+        window=data[i:i+window_length]
+        #coeff=4
+        if abso==0:
+            #coeff=3
+            thresh=coeff*(scipy.stats.median_abs_deviation(window,scale='normal'))
+        else:
+            #coeff=4
+            thresh=coeff*(scipy.stats.median_abs_deviation(abs_window,scale='normal'))
+        ind1, peaks =find_peaks(neg_window, height=thresh,distance=spike_length)
+        del peaks
+        last=i
+        if len(ind1):
+            last=i+ind1[-1]
+        ind.extend([index + i for index in ind1])
+        i=last+10 #0.01 s
+    firing_rate=len(ind)*10000/len(data)
+    print(len(ind), ' spikes detected;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
+    return ind
 
-def clus(cut,spike_list,data):
+def select_clus(cut,spike_list,data):
     from sklearn.cluster import KMeans
     from sklearn.preprocessing import StandardScaler
     from sklearn.decomposition import PCA
@@ -351,4 +382,167 @@ def Bayesian_mixture_model(ISI_data):
 
     print(map_estimate)
     return map_estimate
-#######################
+
+def butter_bandpass(lowcut, highcut, fs, order=5):
+    '''
+    Implementation of Butterworth filtering.
+    
+    Params:
+     - lowcut: low cutting frequency (Hz)
+     - highcut: high cutting frequency (Hz)
+     - fs: sampling frequency (Hz)
+     - order: order of the filter
+    
+    Return:
+     - b,a = coefficients of the filter
+    
+    '''
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
+def clus(cut,spike_list,data):
+    from sklearn.cluster import KMeans
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+    from sklearn.metrics import silhouette_score
+    import numpy as np
+    scale = StandardScaler()
+    estratti_norm = scale.fit_transform(cut)
+    print('\n______________________________________________________________________________________________________________')
+    print('Total spikes: ', estratti_norm.shape[0])
+    n_comp=3
+    pca = PCA(n_components=n_comp)
+    transformed = pca.fit_transform(estratti_norm)
+    spike_list=np.array(spike_list)
+    kmeans_score=[]
+    final_data=[]
+    for n in range (2,4):
+        model = KMeans(n_clusters=n, init='k-means++', n_init=10, max_iter=400, tol=0.25, verbose=0, random_state=None, copy_x=True,  algorithm='lloyd')
+        labels = model.fit_predict(transformed)
+        silhouette_avg = silhouette_score(transformed, labels)
+        kmeans_score.append(silhouette_avg)
+    top_clusters_kmeans = kmeans_score.index(max(kmeans_score))+2
+    if max(kmeans_score)>=0.4:
+        print("\n\n\033[1;31;47mBest cluster in the range 1 to 3: ",top_clusters_kmeans,", with a silhouette score of: ",max(kmeans_score), "\u001b[0m  \n\n")
+        model = KMeans(n_clusters=top_clusters_kmeans,  init='k-means++', n_init=10, max_iter=400, tol=0.25, verbose=0, random_state=None, copy_x=True,  algorithm='lloyd')
+        labels = model.fit_predict(transformed)
+    else:
+        print('Clustering algorithm detected only one cluster')
+        labels=np.zeros(len(spike_list),dtype=int)
+    unique_labels=np.unique(labels)
+    firings=np.zeros(len(unique_labels))
+    color=[]
+    for i in labels:
+        color.append(plt.rcParams['axes.prop_cycle'].by_key()['color'][i])
+    for i,cluster_label in enumerate(unique_labels):
+        cluster_data=cut[labels==cluster_label]
+        mean_wave=np.mean(cluster_data, axis=0)
+        std_wave=np.std(cluster_data, axis=0)
+        #distances=np.abs(cluster_data - mean_wave)
+        #distance_threshold=2*std_wave
+        #indices_to_keep=np.all(distances<=distance_threshold,axis=1)
+        #filtered_cluster_data=cluster_data[indices_to_keep]
+        filtered_cluster_data=cluster_data
+        plotting_data=filtered_cluster_data.transpose()
+        firings[i]=len(filtered_cluster_data)*10000/len(data)
+        fig = plt.figure(figsize=(10,8))
+        plt.subplot(3,1,i+1)
+        plt.plot(plotting_data,alpha=0.5)
+        plt.title(f'Cluster {i} \n numerosity: {len(filtered_cluster_data)}')
+        plt.xlabel('Time [ms]')
+        plt.ylabel('Signal Amplitude')
+        mean_wave = np.mean(filtered_cluster_data, axis=0)
+        std_wave = np.std(filtered_cluster_data, axis=0)
+        plt.errorbar(range(mean_wave.shape[0]), mean_wave, yerr=std_wave, color='black', linewidth=2, label='Avg. Waveform')
+        plt.legend(loc='lower right')
+        plt.show()
+        ul=spike_list[labels==i]
+        ull=ul
+        #ull=ul[indices_to_keep]
+        final_data.append(ull)
+        plt.subplot(3, 1, i + 1)
+        plt.hist(np.diff(ull), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
+        plt.title(f'ISI: Cluster {i}, \n firing rate: {format(len(final_data[i])*10000/len(data), ".2f")} Hz')
+        plt.show()
+        plt.xlabel('Time [0.1ms]')
+        plt.ylabel('Voltage [\u03BCV]')
+        plt.show()    
+
+    return final_data
+
+
+'''
+def RMM(data):
+    # window size 30ms, threshold for first spike: 3*mad(window), threshold for second spike: 1.1 mean(window)
+    # differential threshold: 6*mad(window)
+    window_size=10000 #1 sec (1000ms)
+    research_size=300 #0.03 sec (30ms)
+    i=0
+    first_peaks_set=set()
+    second_peaks_set=set()
+    neg_data=-(data)
+    pbar = tqdm(total = len(data)-window_size)
+    overlap=0
+   # with tqdm(total=100) as pbar:
+    while i<=len(data)-window_size-50:
+
+        i_bf=i
+        entrato=False
+        found=False
+        neg_window=neg_data[i:i+window_size-overlap*window_size]
+        window=data[i:i+window_size-overlap*window_size]
+        mad=scipy.stats.median_abs_deviation(window)
+        thresh=4*mad
+        media=1.1*np.mean(window)
+        first_peaks,amp=find_peaks(neg_window.ravel(),height=float(thresh))
+        len1=len(first_peaks[0])
+        for k in len(first_peaks):
+            starting_point=i+k
+            research_window=data[starting_point:starting_point+research_size]
+            second_peaks,amp2=find_peaks(research_window,height=float(media))
+            if first_peaks[k+1]>second_peaks[0]:
+                second=second_peaks[0]
+                first_peaks_set.append(first_peaks[k])
+            overlap=1
+
+        while j <=len(research_window)
+        second_peaks=find_peaks(window.ravel(),height=float(media))
+        len2=len(second_peaks[0])
+        if len1==0 or len2==0:
+            i=i+1
+        else:
+            if entrato==False:
+                entrato=True
+                for k in range(len(first_peaks[0])):
+                    for j in range(len(second_peaks[0])):
+                        if second_peaks[0][j]>first_peaks[0][k]:
+                            #cioè se il secondo picco è successivo e se il primo picco ha un valore maggiore in assoluto
+                            primo=abs_window[first_peaks[0][k]]
+                            secondo=abs_window[second_peaks[0][j]]
+                            #diff=abs_window[first_peaks[0][k]] + abs_window[second_peaks[0][j]]
+                            diff=primo+secondo
+
+                            if found==False and window[first_peaks[0][k]]*window[second_peaks[0][j]]<0 and diff  > 2*thresh and primo>1.5*secondo:# and abs_window[first_peaks[0][j]]>abs_window[second_peaks[0][k]] and abs_window[second_peaks[0][j]]<3*media:
+                                #cioè se non sono stati trovati già due indici che soddisfano, se i picchi hanno segni opposti e hanno una distanza sopra la soglia
+                                peaks_indices=(i+first_peaks[0][k],i+second_peaks[0][j])
+                                found=True
+                                #print('found',i)
+                                first_peaks_set.add(peaks_indices[0])
+                                second_peaks_set.add(peaks_indices[1])
+                                i=peaks_indices[1]+10
+                first_peaks=[]
+                second_peaks=[]
+                i=i+1
+            else:
+                i=i+1
+        #time.sleep(0.1)  # Adjust the sleep duration as needed
+        delta=i-i_bf
+        pbar.update(delta)
+    minima=sorted(list(first_peaks_set))
+    maxima=sorted(list(second_peaks_set))
+    firing_rate=len(minima)*10000/len(data)
+    print('detected spikes:', len(minima), 'firing rate: ',firing_rate)
+    return minima, maxima
+'''
