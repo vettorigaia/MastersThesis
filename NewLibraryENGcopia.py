@@ -26,7 +26,7 @@ from scipy.signal import butter, filtfilt
 
 
 
-def spike_sorting(input_path,output_path,abso,coeff):
+def spike_sorting(input_path,output_path):
     name_data = input_path.split("/")[-1]
     #file reading:
     print('File Reading...')
@@ -64,7 +64,7 @@ def spike_sorting(input_path,output_path,abso,coeff):
     for i,electrode in enumerate(tqdm(prova.columns)):
         channel=prova[electrode]
         #ind=windowed_spike_detection(channel)
-        ind=spike_detection(channel,abso,coeff)
+        ind=spike_detection(channel)
         all_ind.append(ind)
     #spike extraction:
     cut_outs=[]
@@ -78,10 +78,13 @@ def spike_sorting(input_path,output_path,abso,coeff):
         all_new.append(all_new1)    
     # Clustering:
     final_data=[]
+    final_firing=[]
+    final_firing.append(name_data)
     print('Clustering: ')
     for channel in (tqdm(range(len(cut_outs)))):
-        channel_clusters1=clus(cut_outs[channel],all_new[channel],prova.iloc[:,channel])
+        channel_clusters1,final_firing1=clus(cut_outs[channel],all_new[channel],prova.iloc[:,channel])
         final_data.append(channel_clusters1)
+        final_firing.append(final_firing1)
     neurons=[]
     for channel in final_data:
         for neuron in channel:
@@ -104,7 +107,7 @@ def spike_sorting(input_path,output_path,abso,coeff):
     np.savetxt(f"{output_path}/{save_data}.txt", adj_neur, delimiter=', ', fmt='%12.8f')
 
     print('saved: ',save_data)
-    return neurons
+    return neurons, final_firing
 
 def poiproc(neurons,target,stim):
     from scipy.stats import ks_2samp
@@ -197,8 +200,8 @@ def windowed_spike_detection(data):
     firing_rate=len(ind)*10000/len(data)
     print(len(ind), ' spikes detected;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return ind
-def spike_detection(data,abso,coeff):
-    spike_length=30 #3ms
+def spike_detection(data):
+    spike_length=30 #3ms (0.003s)
     window_length=1000 #0.1 sec (100ms)
     neg_data=-(data)
     abs_data=abs(data)
@@ -209,19 +212,19 @@ def spike_detection(data,abso,coeff):
         abs_window=abs_data[i:i+window_length]
         window=data[i:i+window_length]
         #coeff=4
-        if abso==0:
-            #coeff=3
-            thresh=coeff*(scipy.stats.median_abs_deviation(window,scale='normal'))
-        else:
+        #if abso==0:
+        coeff=4
+        thresh=coeff*(scipy.stats.median_abs_deviation(window,scale='normal'))
+        #else:
             #coeff=4
-            thresh=coeff*(scipy.stats.median_abs_deviation(abs_window,scale='normal'))
+            #thresh=coeff*(scipy.stats.median_abs_deviation(abs_window,scale='normal'))
         ind1, peaks =find_peaks(neg_window, height=thresh,distance=spike_length)
         del peaks
         last=i
         if len(ind1):
             last=i+ind1[-1]
         ind.extend([index + i for index in ind1])
-        i=last+10 #0.01 s
+        i=last+spike_length #0.003 s (30ms)
     firing_rate=len(ind)*10000/len(data)
     print(len(ind), ' spikes detected;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return ind
@@ -418,6 +421,7 @@ def clus(cut,spike_list,data):
     spike_list=np.array(spike_list)
     kmeans_score=[]
     final_data=[]
+    final_firing=[]
     for n in range (2,4):
         model = KMeans(n_clusters=n, init='k-means++', n_init=10, max_iter=400, tol=0.25, verbose=0, random_state=None, copy_x=True,  algorithm='lloyd')
         labels = model.fit_predict(transformed)
@@ -447,7 +451,7 @@ def clus(cut,spike_list,data):
         filtered_cluster_data=cluster_data
         plotting_data=filtered_cluster_data.transpose()
         firings[i]=len(filtered_cluster_data)*10000/len(data)
-        fig = plt.figure(figsize=(10,8))
+        fig = plt.figure(figsize=(8,10))
         plt.subplot(3,1,i+1)
         plt.plot(plotting_data,alpha=0.5)
         plt.title(f'Cluster {i} \n numerosity: {len(filtered_cluster_data)}')
@@ -462,15 +466,13 @@ def clus(cut,spike_list,data):
         ull=ul
         #ull=ul[indices_to_keep]
         final_data.append(ull)
+        final_firing.append(firings)
         plt.subplot(3, 1, i + 1)
         plt.hist(np.diff(ull), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
         plt.title(f'ISI: Cluster {i}, \n firing rate: {format(len(final_data[i])*10000/len(data), ".2f")} Hz')
         plt.show()
-        plt.xlabel('Time [0.1ms]')
-        plt.ylabel('Voltage [\u03BCV]')
-        plt.show()    
-
-    return final_data
+        
+    return final_data, final_firing
 
 
 '''
