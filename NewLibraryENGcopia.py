@@ -23,6 +23,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.signal import find_peaks
 import time
 from scipy.signal import butter, filtfilt
+from scipy import signal
 
 
 
@@ -99,7 +100,7 @@ def spike_sorting(input_path,output_path):
             max_len=neuron.shape[0]
         counter+=1
     for neuron in neurons:
-        if neuron.shape[0]<max_len and neuron.shape[0]>=1000:
+        if neuron.shape[0]<max_len:
             diff = max_len-neuron.shape[0]
             adj_neur.append(np.concatenate((neuron,np.zeros([diff]))))
     save_data = 'After'+name_data+'.txt'
