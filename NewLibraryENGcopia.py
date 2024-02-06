@@ -182,6 +182,43 @@ def cut_all(all,data):
     firing_rate=len(all_new)*10000/len(data)
     print(len(all)-len(all_new),' spikes removed;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return cut,all_new
+
+def new_cut(all,data):
+    pre = 0.0015
+    post = 0.0015
+    fs=10000
+    prima = int(pre*fs)
+    dopo = int(post*fs)
+    lunghezza_indici = len(all)
+    cut= np.empty([lunghezza_indici, prima+dopo])
+    dim = data.shape[0]
+    k=0
+    coeff=1.5
+    signal_std=np.std(data)
+    standard_threshold=signal_std
+    for i in all:
+        if (i-prima >= 0) and (i+dopo <= dim):
+            spike= data[(int(i)-prima):(int(i)+dopo)].squeeze()
+            cut[k,:] = spike
+            k+=1
+    standards=np.std(cut)
+    indices_to_keep=np.all(standards<coeff*standard_threshold,axis=1)
+    all_new=indices_to_keep
+    filtered_cut=cut[indices_to_keep]
+    k=0
+    cut=np.empty([indices_to_keep, prima+dopo])
+    for spike in filtered_cut:
+        media=(np.mean(spike))
+        std=np.std(spike)
+        spike_std=(spike-media)/std
+        cut[k,:]=spike_std
+        k+=1
+    firing_rate=len(all_new)*10000/len(data)
+    print(len(all)-len(all_new),' spikes removed;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
+    return cut,all_new
+    
+
+
 def find_all_spikes(data,thresh):
     spike_length=30 #3ms
     ind, peaks_amp = scipy.signal.find_peaks(abs(data), height=thresh, distance= spike_length)
