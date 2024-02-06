@@ -44,6 +44,17 @@ def spike_sorting(input_path,output_path):
     #prova=prova.iloc[:, :15]
     ref=readings[b'Ref']
     #ref=ref[0:750500]
+    freqs, spectrogram = signal.welch(readings[b'Ref'].values, fs=10000, nfft=1024)
+    noise_freq = freqs[spectrogram.argmax()]
+    Q = 30
+    b, a = scipy.signal.iirnotch(noise_freq, Q, fs)
+    Q = 60
+    b_2, a_2 = scipy.signal.iirnotch(2*noise_freq, Q, fs)
+    channel = readings[b'Ref'].values
+    pre_filtered_ref = scipy.signal.filtfilt(b, a, channel)
+    pre_filtered_ref = scipy.signal.filtfilt(b_2, a_2, pre_filtered_ref) 
+    ref=pre_filtered_ref
+
     #filtering:
     prova_rows = range(prova.shape[0])
     filt_prova = pd.DataFrame(data = 0, columns=prova.columns, index=prova_rows, dtype = "float32")
