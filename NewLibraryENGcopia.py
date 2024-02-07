@@ -523,6 +523,66 @@ def clus(cut,spike_list,data):
         
     return final_data, final_firing
 
+def RMM(data):
+    # window size 100ms, threshold for first spike: 4*mad(window), threshold for second spike: 1.1 mean(window)
+    # differential threshold: 7*mad(window)
+    window_size=1000 #0.1 sec (100ms)
+    spike_length=300 #0.03sec (30ms)
+    i=0
+    first_peaks_set=set()
+    second_peaks_set=set()
+    abs_data=abs(data)
+    #pbar = tqdm(total = len(data)-window_size)
+    neg_data=-(data)
+
+   # with tqdm(total=100) as pbar:
+    while i<=len(data)-window_size-50:
+
+        i_bf=i
+        found=False
+        abs_window=abs_data[i:i+window_size]
+        window=data[i:i+window_size]
+        neg_window=neg_data[i:i+window_size]
+        mad=scipy.stats.median_abs_deviation(window,scale='normal')
+        thresh=4*mad
+        media=1.1*np.mean(window)
+        first_peaks,amp=find_peaks(neg_window,height=float(thresh),distance=spike_length)
+        first_amps=amp['peak_heights']
+        len1=len(first_peaks)
+        second_peaks,amp=find_peaks(window.ravel(),height=float(media))
+        second_amps=amp['peak_heights']
+        len2=len(second_peaks)
+        if len1==0 or len2==0:
+            i=i+spike_length
+        else:
+            for k in range(len(first_peaks)):
+                for j in range(len(second_peaks)):
+                    if second_peaks[j]>first_peaks[k]:
+                        #cioè se il secondo picco è successivo e se il primo picco ha un valore maggiore in assoluto
+                        primo=first_amps[k]
+                        secondo=second_amps[j]
+                        #diff=abs_window[first_peaks[0][k]] + abs_window[second_peaks[0][j]]
+                        diff=primo+secondo
+
+                        if found==False and diff > 7*mad:
+                            #cioè se non sono stati trovati già due indici che soddisfano e hanno una distanza sopra la soglia
+                            peaks_indices=(i+first_peaks[k],i+second_peaks[j])
+                            found=True
+                            #print('found',i)
+                            first_peaks_set.add(peaks_indices[0])
+                            second_peaks_set.add(peaks_indices[1])
+                            i=peaks_indices[1]+1
+            first_peaks=[]
+            second_peaks=[]
+            i=i+spike_length
+        #time.sleep(0.1)  # Adjust the sleep duration as needed
+        delta=i-i_bf
+        #pbar.update(delta)
+    minima=sorted(list(first_peaks_set))
+    maxima=sorted(list(second_peaks_set))
+    firing_rate=len(minima)*10000/len(data)
+    print('detected spikes:', len(minima), len(maxima), 'firing rate: {:.2f}'.format(firing_rate),'Hz')
+    return minima
 
 '''
 def RMM(data):
