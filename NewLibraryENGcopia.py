@@ -121,15 +121,10 @@ def spike_sorting(input_path,output_path):
     print('saved: ',save_data)
     return neurons, final_firing
 
-def poiproc(neurons,target,stim):
-    from scipy.stats import ks_2samp
+def poiproc(file,target,stim,):
     dataframe = pd.DataFrame()
-    #counter_net=1
     counter=0
-    #for net in list_dir_ok:
-    #print(counter_net,') ',net)
-    #counter_net+=1
-    list_neurons = neurons #np.genfromtxt(net, delimiter=',')
+    list_neurons = np.genfromtxt(file, delimiter=',')
     counter=0
     print('Original number of neurons: ',len(list_neurons))
     for neuron in tqdm(list_neurons):
@@ -151,7 +146,9 @@ def poiproc(neurons,target,stim):
         dataframe = pd.concat([dataframe,df],axis = 1)
     print('Final number of neurons: ',counter)
     print('Target = ',target)
-    #ks_2samp(lista_samples,ISI_healthy,mode = 'asymp')
+    file_name = file.split("/")[-1]
+    final = dataframe.T
+    final.to_csv('Data after PP/'+file_name)
     return dataframe
 
 def cut_all(all,data):
