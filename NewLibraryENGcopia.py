@@ -523,7 +523,9 @@ def clus(cut,spike_list,data):
         
     return final_data, final_firing
 
-def RMM(data):
+
+'''
+def neg_RMM(data):
     # window size 100ms, threshold for first spike: 4*mad(window), threshold for second spike: 1.1 mean(window)
     # differential threshold: 7*mad(window)
     window_size=1000 #0.1 sec (100ms)
@@ -558,7 +560,7 @@ def RMM(data):
             for k in range(len(first_peaks)):
                 for j in range(len(second_peaks)):
                     if second_peaks[j]>first_peaks[k]:
-                        #cioè se il secondo picco è successivo e se il primo picco ha un valore maggiore in assoluto
+                        #cioè se il secondo picco è successivo al primo
                         primo=first_amps[k]
                         secondo=second_amps[j]
                         #diff=abs_window[first_peaks[0][k]] + abs_window[second_peaks[0][j]]
@@ -584,7 +586,6 @@ def RMM(data):
     print('detected spikes:', len(minima), len(maxima), 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return minima
 
-'''
 def RMM(data):
     # window size 30ms, threshold for first spike: 3*mad(window), threshold for second spike: 1.1 mean(window)
     # differential threshold: 6*mad(window)
