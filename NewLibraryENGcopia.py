@@ -153,38 +153,49 @@ def poiproc(file,target,stim,):
     final.to_csv('Data after PP/'+file_name)
     return dataframe
 
-def cut_all(all,data):
-    pre = 0.0015
-    post = 0.0015
+def cut_all(alls,data):
+    pre = 0.001
+    post = 0.002
     fs=10000
     prima = int(pre*fs)
     dopo = int(post*fs)
-    lunghezza_indici = len(all)
+    lunghezza_indici = len(alls)
     cut= np.empty([lunghezza_indici, prima+dopo])
     dim = data.shape[0]
     k=0
     coeff=1.5
     signal_std=np.std(data)
-    all_new=[]
-    for i in all:
+    signal_mean=np.mean(data)
+    standard_mean=signal_mean
+    standard_threshold=signal_std
+    for i in alls:
         if (i-prima >= 0) and (i+dopo <= dim):
             spike= data[(int(i)-prima):(int(i)+dopo)].squeeze()
-            media=(np.mean(spike))
-            std=np.std(spike)
-            spike_std=(spike-media)/std
-            if abs(std)<=coeff*abs(signal_std):
-                cut[k,:] = spike_std
-                all_new.append(i)
-                k += 1
-    size=k
-    cut=cut[0:size]
-    firing_rate=len(all_new)*10000/len(data)
-    print(len(all)-len(all_new),' spikes removed;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
-    return cut,all_new
+            cut[k,:] = spike
+            k+=1
+    standards=np.std(cut,axis=1)
+    means=np.mean(cut,axis=1)
+
+    thr1=coeff*standard_threshold
+    thr2=coeff*standard_mean
+    
+    indices=np.where((standards<thr1)&(means<thr2))[0]
+
+    filtered_alls = np.array(alls)[indices]
+    filtered_cut=cut[indices]
+    
+    spike_means=np.mean(filtered_cut,axis=1,keepdims=True)
+    spike_stds=np.std(filtered_cut,axis=1,keepdims=True)
+    
+    standardized_cuts=(filtered_cut-spike_means)/spike_stds
+    
+    firing_rate=len(indices)*10000/len(data)
+    print(len(alls)-len(indices),' spikes removed;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
+    return standardized_cuts,filtered_alls
  
 def spike_detection(data):
     spike_length=30 #3ms (0.003s)
-    window_length=1000 #0.1 sec (100ms)
+    window_length=600000 #1 min (60s)
     neg_data=-(data)
     abs_data=abs(data)
     i=0
@@ -193,13 +204,8 @@ def spike_detection(data):
         neg_window=neg_data[i:i+window_length]
         abs_window=abs_data[i:i+window_length]
         window=data[i:i+window_length]
-        #coeff=4
-        #if abso==0:
-        coeff=4
+        coeff=3
         thresh=coeff*(scipy.stats.median_abs_deviation(window,scale='normal'))
-        #else:
-            #coeff=4
-            #thresh=coeff*(scipy.stats.median_abs_deviation(abs_window,scale='normal'))
         ind1, peaks =find_peaks(neg_window, height=thresh,distance=spike_length)
         del peaks
         last=i
