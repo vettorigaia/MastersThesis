@@ -27,7 +27,7 @@ from scipy import signal
 
 
 
-def spike_sorting(input_path,output_path):
+def this_spike_sorting(input_path,output_path,savename):
     name_data = input_path.split("/")[-1]
     #file reading:
     print('File Reading...')
@@ -39,9 +39,9 @@ def spike_sorting(input_path,output_path):
     readings = pd.DataFrame(data = data_readings.transpose(), columns = labels)
     fs = 10000 #Sampling Frequency
     print('data shape: ',readings.shape)
-    prova=readings.drop([b'Ref'],axis=1)
-    #prova=prova.iloc[0:750500, :]
-    #prova=prova.iloc[:, :15]
+    signal=readings.drop([b'Ref'],axis=1)
+    data
+
     ref=readings[b'Ref']
     #ref=ref[0:750500]
     freqs, spectrogram = signal.welch(readings[b'Ref'].values, fs=10000, nfft=1024)
@@ -56,8 +56,8 @@ def spike_sorting(input_path,output_path):
     ref=pre_filtered_ref
 
     #filtering:
-    prova_rows = range(prova.shape[0])
-    filt_prova = pd.DataFrame(data = 0, columns=prova.columns, index=prova_rows, dtype = "float32")
+    signal_rows = range(signal.shape[0])
+    filt_signal = pd.DataFrame(data = 0, columns=signal.columns, index=signal_rows, dtype = "float32")
     lowcut = 300
     highcut = 3000
     fs=10000
@@ -65,27 +65,27 @@ def spike_sorting(input_path,output_path):
     b,a=butter_bandpass(lowcut,highcut,fs,order=order)
     filt_ref=filtfilt(b,a,ref)
     print('Data Filtering:')
-    for x in tqdm(range(prova.shape[1])):
-        filt_prova.values[:,x] = scipy.signal.filtfilt(b, a, prova.values[:,x])
-    for electrode in prova.columns:
-        filt_prova[electrode] = filt_prova[electrode] - filt_ref
-    prova=filt_prova
+    for x in tqdm(range(signal.shape[1])):
+        filt_signal.values[:,x] = scipy.signal.filtfilt(b, a, signal.values[:,x])
+    for electrode in signal.columns:
+        filt_signal[electrode] = filt_signal[electrode] - filt_ref
+    signal=filt_signal
     #detection:
     all_ind=[]
     print('Spike Detection: ')
-    for i,electrode in enumerate(tqdm(prova.columns)):
-        channel=prova[electrode]
+    for i,electrode in enumerate(tqdm(signal.columns)):
+        channel=signal[electrode]
         #ind=windowed_spike_detection(channel)
-        ind=spike_detection(channel)
+        ind=this_spike_detection(channel)
         all_ind.append(ind)
     #spike extraction:
     cut_outs=[]
     all_new=[]
     print('Spike extraction: ')
-    for i,electrode in enumerate(tqdm(prova.columns)):
+    for i,electrode in enumerate(tqdm(signal.columns)):
         ind=all_ind[i]
-        channel=prova[electrode]
-        cut_outs1,all_new1=cut_all(ind,channel)
+        channel=signal[electrode]
+        cut_outs1,all_new1=spike_extraction(ind,channel)
         cut_outs.append(cut_outs1)
         all_new.append(all_new1)    
     # Clustering:
@@ -94,7 +94,7 @@ def spike_sorting(input_path,output_path):
     final_firing.append(name_data)
     print('Clustering: ')
     for channel in (tqdm(range(len(cut_outs)))):
-        channel_clusters1,final_firing1=clus(cut_outs[channel],all_new[channel],prova.iloc[:,channel])
+        channel_clusters1,final_firing1=this_clus(cut_outs[channel],all_new[channel],signal.iloc[:,channel],savename)
         final_data.append(channel_clusters1)
         final_firing.append(final_firing1)
     neurons=[]
@@ -163,7 +163,7 @@ def cut_all(alls,data):
     cut= np.empty([lunghezza_indici, prima+dopo])
     dim = data.shape[0]
     k=0
-    coeff=1.5
+    #coeff=1.5
     signal_std=np.std(data)
     signal_mean=np.mean(data)
     standard_mean=signal_mean
@@ -176,8 +176,8 @@ def cut_all(alls,data):
     standards=np.std(cut,axis=1)
     means=np.mean(cut,axis=1)
 
-    thr1=coeff*standard_threshold
-    thr2=coeff*standard_mean
+    thr1=2*standard_threshold
+    thr2=3*standard_mean
     
     indices=np.where((standards<thr1)&(means<thr2))[0]
 
@@ -197,12 +197,10 @@ def spike_detection(data):
     spike_length=30 #3ms (0.003s)
     window_length=600000 #1 min (60s)
     neg_data=-(data)
-    abs_data=abs(data)
     i=0
     ind=[]
     while i < len(data)-window_length:
         neg_window=neg_data[i:i+window_length]
-        abs_window=abs_data[i:i+window_length]
         window=data[i:i+window_length]
         coeff=3
         thresh=coeff*(scipy.stats.median_abs_deviation(window,scale='normal'))
@@ -213,6 +211,12 @@ def spike_detection(data):
             last=i+ind1[-1]
         ind.extend([index + i for index in ind1])
         i=last+spike_length #0.003 s (30ms)
+    window = data[last+spike_length:]
+    neg_window=-window
+    thresh=coeff*(scipy.stats.median_abs_deviation(window,scale='normal'))
+    ind1, peaks =find_peaks(neg_window, height=thresh,distance=spike_length)
+    ind.extend([index + i for index in ind1])# if index + i < len(data)])
+
     firing_rate=len(ind)*10000/len(data)
     print(len(ind), ' spikes detected;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return ind
@@ -408,6 +412,8 @@ def new_cut(all,data):
 def find_all_spikes(data,thresh):
     spike_length=30 #3ms
     ind, peaks_amp = scipy.signal.find_peaks(abs(data), height=thresh, distance= spike_length)
+    pos=peaks_amp['peak heights'][peaks_amp['peak heights']>0]
+    neg=peaks_amp['peak heights'][peaks_amp['peak heights']<0]
     firing_rate=(len(ind)*10000)/len(data)
     #print(len(ind), ' spikes detected;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return ind
