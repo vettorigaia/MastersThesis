@@ -1,4 +1,4 @@
-#SORTING Ver2
+#LRRK2_MEALibrary
 from tqdm.notebook import tqdm
 import numpy as np
 import pandas as pd
@@ -16,16 +16,13 @@ from matplotlib import cm
 import seaborn as sns
 import h5py
 import scipy
-import pywt
 #from tqdm import tqdm
 from tqdm.notebook import tqdm
-from mpl_toolkits.mplot3d import Axes3D
 from scipy.signal import find_peaks
 import time
 from scipy.signal import butter, filtfilt
-from scipy import signal
-
-
+import scipy.stats as st
+PPmodelfolder="/Users/Gaia_1/Desktop/tesi/PPplots/"
 
 def spike_sorting(input_path,output_path,savename):
     name_data = input_path.split("/")[-1]
@@ -39,11 +36,11 @@ def spike_sorting(input_path,output_path,savename):
     readings = pd.DataFrame(data = data_readings.transpose(), columns = labels)
     fs = 10000 #Sampling Frequency
     print('data shape: ',readings.shape)
-    signal=readings.drop([b'Ref'],axis=1)
+    signal_mea=readings.drop([b'Ref'],axis=1)
     ref=readings[b'Ref']
     
     #ref filtering
-    freqs, spectrogram = signal.welch(readings[b'Ref'].values, fs=10000, nfft=1024)
+    freqs, spectrogram = scipy.signal.welch(readings[b'Ref'].values, fs=10000, nfft=1024)
     noise_freq = freqs[spectrogram.argmax()]
     Q = 30
     b, a = scipy.signal.iirnotch(noise_freq, Q, fs)
@@ -55,8 +52,8 @@ def spike_sorting(input_path,output_path,savename):
     ref=pre_filtered_ref
 
     #filtering:
-    signal_rows = range(signal.shape[0])
-    filt_signal = pd.DataFrame(data = 0, columns=signal.columns, index=signal_rows, dtype = "float32")
+    signal_rows = range(signal_mea.shape[0])
+    filt_signal = pd.DataFrame(data = 0, columns=signal_mea.columns, index=signal_rows, dtype = "float32")
     lowcut = 300
     highcut = 3000
     fs=10000
@@ -64,25 +61,25 @@ def spike_sorting(input_path,output_path,savename):
     b,a=butter_bandpass(lowcut,highcut,fs,order=order)
     filt_ref=filtfilt(b,a,ref)
     print('\nData Filtering:')
-    for x in tqdm(range(signal.shape[1])):
-        filt_signal.values[:,x] = scipy.signal.filtfilt(b, a, signal.values[:,x])
-    for electrode in signal.columns:
+    for x in tqdm(range(signal_mea.shape[1])):
+        filt_signal.values[:,x] = scipy.signal.filtfilt(b, a, signal_mea.values[:,x])
+    for electrode in signal_mea.columns:
         filt_signal[electrode] = filt_signal[electrode] - filt_ref
-    signal=filt_signal
+    signal_mea=filt_signal
     #detection:
     all_ind=[]
     print('\nSpike Detection: ')
-    for i,electrode in enumerate(tqdm(signal.columns)):
-        channel=signal[electrode]
+    for i,electrode in enumerate(tqdm(signal_mea.columns)):
+        channel=signal_mea[electrode]
         ind=spike_detection(channel)
         all_ind.append(ind)
     #spike extraction:
     cut_outs=[]
     all_new=[]
     print('\nSpike extraction: ')
-    for i,electrode in enumerate(tqdm(signal.columns)):
+    for i,electrode in enumerate(tqdm(signal_mea.columns)):
         ind=all_ind[i]
-        channel=signal[electrode]
+        channel=signal_mea[electrode]
         cut_outs1,all_new1=spike_extraction(ind,channel)
         cut_outs.append(cut_outs1)
         all_new.append(all_new1)    
@@ -92,7 +89,7 @@ def spike_sorting(input_path,output_path,savename):
     final_firing.append(name_data)
     print('\nClustering: ')
     for channel in (tqdm(range(len(cut_outs)))):
-        channel_clusters1,final_firing1=clus(cut_outs[channel],all_new[channel],signal.iloc[:,channel],savename)
+        channel_clusters1,final_firing1=clus(cut_outs[channel],all_new[channel],signal_mea.iloc[:,channel],savename)
         final_data.append(channel_clusters1)
         final_firing.append(final_firing1)
     neurons=[]
@@ -135,6 +132,12 @@ def spike_detection(data):
             last=i+ind1[-1]
         ind.extend([index + i for index in ind1])
         i=last+spike_length #0.003 s (30ms)
+    window = data[last+spike_length:]
+    neg_window=-window
+    thresh=coeff*(scipy.stats.median_abs_deviation(window,scale='normal'))
+    ind1, _ =find_peaks(neg_window, height=thresh,distance=spike_length)
+    ind.extend([index + i for index in ind1])
+
     firing_rate=len(ind)*10000/len(data)
     print(len(ind), ' spikes detected;  ', 'firing rate: {:.2f}'.format(firing_rate),'Hz')
     return ind
@@ -222,14 +225,14 @@ def clus(cut,spike_list,data,name):
         
         filtered_cluster_data=cluster_data
         
-        plotting_data=filtered_cluster_data.transpose()
+        #plotting_data=filtered_cluster_data.transpose()
         
         firings[i]=len(filtered_cluster_data)*10000/len(data)
         
         fig = plt.figure(figsize=(8,10))
         
         plt.subplot(3,1,i+1)
-        plt.plot(plotting_data,alpha=0.5)
+        #plt.plot(plotting_data,alpha=0.5)
         
         plt.title(f'Cluster {i} \n numerosity: {len(filtered_cluster_data)}')
         plt.xlabel('Time [ms]')
@@ -254,16 +257,31 @@ def clus(cut,spike_list,data,name):
     return final_data, final_firing
 
 ################################POINT PROCESS
-def poiproc(file,target,stim,):
+def CDF(ISI_data,cdf_2gauss):
+    d = np.linspace(min(ISI_data), max(ISI_data), len(ISI_data))
+    cdf_model=cdf_2gauss(d)
+    bins= np.linspace(min(ISI_data), max(ISI_data), len(ISI_data)+1)
+    counts, bins = np.histogram(ISI_data, bins, density=True)
+    cdf_emp = np.cumsum(counts * np.diff(bins))
+    return cdf_emp,cdf_model
+
+def poiproc(name,input_path,output_path):
+    file_name=input_path.split("/")[-1]
+    target=1
+    stim=0
+    if 'health' in file_name:
+        target=0
+    if 'KA' in file_name or '24' in file_name:
+        stim=1
+    
     dataframe = pd.DataFrame()
     counter=0
     list_neurons = np.genfromtxt(file, delimiter=',')
-    counter=0
     print('Original number of neurons: ',len(list_neurons))
     for neuron in tqdm(list_neurons):
         neuron=neuron[neuron>0*10000]
         neuron=neuron[neuron<200*10000]
-        #print('  Neuron with ',neuron.shape[0],'spikes')
+        
         if neuron.shape[0]>1000:
             
             print('  Neuron with ',neuron.shape[0],'spikes')
@@ -271,8 +289,12 @@ def poiproc(file,target,stim,):
             print('    Excluded neuron with n spikes = ',neuron.shape[0])
             continue
         
-        ISI_healthy = np.diff(neuron)/10000
-        map_estimate = Bayesian_mixture_model(ISI_healthy)
+        ISI_data = np.diff(neuron)/10000
+        try:
+            map_estimate = Bayesian_mixture_model(name,counter,ISI_data)
+        except Exception as e:
+            print(f"An error occured: {e}")
+            continue
         if map_estimate!=0:
             counter+=1
             map_estimate['Target']=target
@@ -281,25 +303,23 @@ def poiproc(file,target,stim,):
             dataframe = pd.concat([dataframe,df],axis = 1)
     print('Final number of neurons: ',counter)
     print('Target = ',target)
-    file_name = file.split("/")[-1]
     final = dataframe.T
-    final.to_csv('Data after PP/'+file_name)
+    final.to_csv(f'{output_path}/'+file_name)
     return dataframe
 
-def Bayesian_mixture_model(ISI_data):
-    import scipy.stats as st
+def Bayesian_mixture_model(name,counter,ISI_data):
+    save_folder=PPmodelfolder
     with pm.Model() as model:
         ##### WALD DISTRIBUTION (INVERSE GAUSSIAN)
-        mu1 = pm.Uniform('mu1',lower=0.001,upper=0.02)
-        lam1 = pm.Uniform('lam1',lower=0.001,upper=0.02)
+        mu1 = pm.Uniform('mu1',lower=0,upper=0.2)
+        lam1 = pm.Uniform('lam1',lower=0.001,upper=0.1)
         obs1 = pm.Wald.dist(mu=mu1,lam=lam1)
 
-
-        mu2 = pm.Uniform('mu2',lower=0.02,upper=0.04)
+        mu2 = pm.Uniform('mu2',lower=0,upper=0.2)
         sigma2 = pm.Uniform('sigma2',lower=0.01,upper=0.7)
         obs2 = pm.TruncatedNormal.dist(mu=mu2, sigma=sigma2, lower=0.0)
 
-        mu3 = pm.Uniform('mu3',lower=0.04,upper=0.6)
+        mu3 = pm.Uniform('mu3',lower=0.2,upper=0.6)
         sigma3 = pm.Uniform('sigma3',lower=0.01,upper=0.7)
         obs3 = pm.TruncatedNormal.dist(mu=mu3, sigma=sigma3, lower=0.0)
         
@@ -308,6 +328,7 @@ def Bayesian_mixture_model(ISI_data):
         
     map_estimate = pm.find_MAP(model=model)
     d= np.linspace(0.00, 1, len(ISI_data))
+    #d = np.linspace(min(ISI_data), max(ISI_data), len(ISI_data))
     map_estimate['w1'] = map_estimate['w'][0]
     map_estimate['w2'] = map_estimate['w'][1]
     map_estimate['w3'] = map_estimate['w'][2]
@@ -327,13 +348,38 @@ def Bayesian_mixture_model(ISI_data):
     
     plt.hist(ISI_data, bins, color='orange', alpha=0.7, label='Histogram',density=True)
     plt.plot(d, pdf, color='blue', label='PDF')
-    #plt.xlim(0, 0.2)
     plt.show()
 
     cdf_2gauss = lambda x: w1 * st.invgauss.cdf(x,mu1/lam1, scale = lam1) + w2 * st.norm.cdf(x, mu2, sigma2) + w3*st.norm.cdf(x, mu3, sigma3)
     ks_score=st.ks_1samp(ISI_data[ISI_data>0],  cdf_2gauss, method = 'asymp')
     print('ks score: ',ks_score)
     
+    # KS plot
+    plt.figure(figsize=(12, 8))
+    plt.plot(np.sort(ISI_data[ISI_data > 0]), np.linspace(0, 1, len(ISI_data[ISI_data > 0]), endpoint=False), color='orange', label='Empirical CDF')
+    plt.plot(d, cdf_2gauss(d), color='blue', label='Model CDF')
+    plt.xlabel('Inter-Spike Interval')
+    plt.ylabel('Cumulative Probability')
+    plt.title(f'CDF Plot, ksdist={ks_score}, num:{len(ISI_data)}')
+    plt.legend()
+    plt.savefig(f'{save_folder}{name}_neuron{counter}_CDFplot.jpg',format='jpg')
+    plt.show()
+
+    cdf_emp,cdf_model=CDF(ISI_data,cdf_2gauss)
+    plt.figure(figsize=(12, 8))
+    Nlow = len(ISI_data)  
+    # Plot the confidence bounds
+    plt.plot([0, 1], [0, 1], 'k:')
+    plt.plot([0, 1], [x + 1.36 / np.sqrt(Nlow) for x in [0, 1]], 'r:')
+    plt.plot([0, 1], [x - 1.36 / np.sqrt(Nlow) for x in [0, 1]], 'r:')
+    plt.plot(cdf_emp, cdf_model)    
+    plt.axis([0, 1, 0, 1])         
+    plt.xlabel('Model CDF')
+    plt.ylabel('Empirical CDF')
+    plt.title(f'KS Plot, ksdist={ks_score}, num:{len(ISI_data)}')
+    plt.savefig(f'{save_folder}{name}_neuron{counter}_KS_QQplot.jpg',format='jpg')
+    plt.show()
+
     del map_estimate['w_simplex__']
     del map_estimate['mu1_interval__']
     del map_estimate['lam1_interval__']
@@ -345,8 +391,6 @@ def Bayesian_mixture_model(ISI_data):
     del map_estimate['w']
 
     print(map_estimate)
-    if ks_score[0]>0.3:
-        map_estimate=0
     return map_estimate
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
