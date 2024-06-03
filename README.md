@@ -25,7 +25,6 @@ Point Process Modeling is a method used to characterize the inter-spike interval
 • 2nd Gaussian sigma: 0.01-0.7
 The model for each neuron is chosen using Maximum A Posteriori estimation, based on Bayes’ theorem. Bayes’ theorem, denoted as:
 P(θ|y)=[P(y|θ)P(θ)]/P(y)
-![Schermata 2024-06-03 alle 16 45 30](https://github.com/vettorigaia/tesi/assets/150171386/f40dd465-cda5-44f2-b7c6-7d69502e9fa0)
 represents the relationship between the posterior probability P(θ|y), the likelihood function P(y|θ), and the prior probability P(θ) of the parameters θ. In our context, we define the prior probabilities of parameters based on their predetermined ranges, as listed above, while the likelihood function is derived from the inter-spike intervals data. By employing MAP estimation, we aim to identify the parameter values that maximize the posterior probability distribution P(θ|y). Each model’s performance is then evaluated using KS distance metrics and KS plots.
 
 ## Classification
@@ -35,7 +34,10 @@ The final stage of our processing pipeline encompasses classification tasks, whi
 The key points of the obtained results, discussed in the thesis are:
 • The control population closely aligns with an almost “pure” Inverse Gaussian model (Table 1), consistent with the theoretical framework outlined in Section 2.8 in the thesis.
 • Post-stimulation activity demonstrates divergent trajectories in the two populations (Figure 2), suggesting a potential disruption in neuron functioning due to the genetic mutation.
+
+
 ![Schermata 2024-06-03 alle 16 54 37](https://github.com/vettorigaia/tesi/assets/150171386/1252eeb9-6c5c-4de0-a937-c38ea618c46e)
+
 ![Schermata 2024-06-03 alle 16 55 23](https://github.com/vettorigaia/tesi/assets/150171386/d814d726-e0d8-40b9-8267-1045fbb7a9b2)
 
 The study presented builds upon existing neuronal modeling work, aiming to refine the existing framework by integrating signal processing techniques, Bayesian classification, and machine learning methods into a comprehensive pipeline for processing, modeling, and classifying raw MEA data into 2 and 4 classes. While the focus has been on distinguishing control versus G2019S LRRK2 genetic mutation samples, the pipeline has broader applicability. 
