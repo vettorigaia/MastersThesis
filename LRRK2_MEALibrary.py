@@ -6,23 +6,44 @@ import sklearn.preprocessing as ps
 from sklearn.preprocessing import StandardScaler
 from random import randint
 from fastdtw import fastdtw
-import copy
 import pymc as pm
 from gettext import find
-import sys, importlib
 from  McsPy.McsData import RawData
 import matplotlib.pyplot as plt
-from matplotlib import cm
-import seaborn as sns
 import h5py
 import scipy
-#from tqdm import tqdm
-from tqdm.notebook import tqdm
+
+
 from scipy.signal import find_peaks
-import time
 from scipy.signal import butter, filtfilt
 import scipy.stats as st
 PPmodelfolder="/Users/Gaia_1/Desktop/tesi/PPplots/"
+
+import glob
+#from tqdm import tqdm
+
+def assign_name(file, n_healthy_bl, n_healthy_st, n_lrrk2_bl, n_lrrk2_st):
+    target = 1
+    stim = 0
+    if 'health' in file:
+        target = 0
+    if 'after' in file:
+        stim = 1
+    
+    if target == 0 and stim == 0:
+        name = f"healthy_bl_{n_healthy_bl}"
+        n_healthy_bl += 1
+    elif target == 0 and stim == 1:
+        name = f"healthy_st_{n_healthy_st}"
+        n_healthy_st += 1
+    elif target == 1 and stim == 0:
+        name = f"lrrk2_bl_{n_lrrk2_bl}"
+        n_lrrk2_bl += 1
+    elif target == 1 and stim == 1:
+        name = f"lrrk2_st_{n_lrrk2_st}"
+        n_lrrk2_st += 1
+
+    return name, target, stim, n_healthy_bl, n_healthy_st, n_lrrk2_bl, n_lrrk2_st
 
 def spike_sorting(input_path,output_path,savename):
     name_data = input_path.split("/")[-1]
