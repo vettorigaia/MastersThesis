@@ -43,7 +43,9 @@ The final stage of our processing pipeline encompasses classification tasks, whi
 
 ## Results
 The key points of the obtained results, discussed in the thesis are:
+
 • The control population closely aligns with an almost “pure” Inverse Gaussian model (Table 1), consistent with the theoretical framework outlined in Section 2.8 in the thesis.
+
 • Post-stimulation activity demonstrates divergent trajectories in the two populations (Figure 2), suggesting a potential disruption in neuron functioning due to the genetic mutation.
 
 
