@@ -2,10 +2,15 @@
 ## Thesis Abstract
 Parkinson’s disease (PD) is a debilitating neurodegenerative disorder whose etiology is strongly linked to the G2019S mutation of the LRRK2 gene - or Dardarin. 
 Although this causal relationship is well established, the underlying mechanisms are not fully understood. In this thesis, we use Microelectrode Array (MEA) technology to analyze in-vitro neural networks, in order to delineate the characteristic neural activity patterns of carriers of the G2019S mutation of the LRRK2 gene, associated with PD pathogenesis.
+
 This study utilizes recordings from both G2019S-mutated cortical neural networks and from healthy control networks in two phases: before (baseline) and after Kainic Acid stimulation. The chemical stimulation process aims to induce neurotoxic effects, and by incorporating post-stimulation data into the analysis, to record changes in neural activity.
+
 The work focuses on the development of a three-phase algorithm capable of receiving raw MEA recordings and recognizing the population to which they belong, distinguishing between healthy and mutated activity. Initially, Spike Sorting techniques are used to identify individual neuronal activities. Subsequently, a Point Process Modeling technique is employed to characterize the parameters of the ISI curve distribution, through Maximum A Posteriori Estimation. Finally, a classification phase is performed, where the model is trained with the parameters obtained from the modeling, and the data are categorized initially into mutated and control neurons, and subsequently, in a multi-class problem, both in terms of type of population and baseline vs. post-stimulation activity.
+
 The results obtained from binary classification demonstrate an excellent accuracy of 99% (mutated vs. control) using a Support Vector Machine model.
+
 Furthermore, in a more nuanced four-class classification scenario (mutated vs. control and pre- vs. post-stimulation), a Random Forest classifier achieves an accuracy of 77%, showcasing its efficacy in identifying both the genetic mutation and the stimulation-induced changes in neural activity.
+
 The research sheds light on the complex interplay between the LRRK2 mutation and neuronal activity dynamics, providing valuable insights into the pathophysiological mechanisms underlying Parkinson’s disease, as confirmed by the obtained results. Moreover, the computational framework developed in this study offers a novel approach for studying neurodegenerative disorders at the cellular level, with implications for future diagnostic and therapeutic strategies.
 
 ## The Data
@@ -13,6 +18,7 @@ The data utilized in this study comprises recordings from 12 neural networks of 
 
 ## Spike Sorting
 The spike sorting process consists of processing raw MEA data to extract spikes and assign them to individual neurons, thereby defining each neuron’s complete activity.
+
 Initially, the signal undergoes filtering with a band-pass Butterworth filter ranging from 300 to 3000Hz, followed by the application of a notch filter at critical frequencies on the Reference channel, which is subsequently subtracted from every other channel. To discern spikes from background noise, a threshold is set at 3 times the Median Absolute Deviation (MAD) of the signal over one-minute windows. After initial peak detection, each spike is extracted as a 3ms window around the peak index and evaluated to determine if it meets the criteria for a real spike. These criteria primarily involve mean and standard deviation considerations, as noisy and non-physiological spikes tend to exhibit high values in these metrics. Once the spikes are selected, they undergo standardization and the first three Principal Components, obtained through PCA, are clustered using the k-means clustering method. The cluster composition with the highest silhouette score is chosen. If no cluster configuration achieves a silhouette score above 0.5 (the standard threshold), a single cluster is defined.
 
 ## Point Process Modeling
@@ -54,7 +60,10 @@ The key points of the obtained results, discussed in the thesis are:
 ![Schermata 2024-06-03 alle 16 55 23](https://github.com/vettorigaia/tesi/assets/150171386/d814d726-e0d8-40b9-8267-1045fbb7a9b2)
 
 The study presented builds upon existing neuronal modeling work, aiming to refine the existing framework by integrating signal processing techniques, Bayesian classification, and machine learning methods into a comprehensive pipeline for processing, modeling, and classifying raw MEA data into 2 and 4 classes. While the focus has been on distinguishing control versus G2019S LRRK2 genetic mutation samples, the pipeline has broader applicability. 
+
 Key improvements and advancements employed in this work include enhancing the Spike Sorting algorithm through targeted refinements, improving Point Process Modeling by fine-tuning parameter distributions, and refining the Classification phase outcomes. Although our comprehensive pipeline yielded promising results, areas for enhancement remain, particularly in spike sorting algorithms. Opportunities for refinement exist in exploring alternative classification scenarios beyond the current focus of control versus LRRK2-mutated samples.
+
 This study leveraged advanced neurotechnology and computational methodologies to dissect the underlying mechanisms of neurodegeneration associated with the G2019S mutation in the LRRK2 gene. Through characterizing aberrant neuronal activity patterns, we shed light on potential pathophysiological pathways implicated in Parkinson’s Disease progression.
+
 The reported differences between the healthy population and the mutated one, correlate with expected physiological considerations. As reported in Section 2.5 in the thesis, the LRRK2 gene is strictly connected to the neuron’s well-being and functional behaviors, and its mutation predisposes it to degeneration and malfunctions, observed especially after the KA stimulation, which is meant to provoke neuro-toxicity. 
 While achieving its primary objective of sorting, modeling, and classifying, with excellent performance results and providing a complete computational pipeline for neuronal data analysis, this work also contributes to a deeper understanding of neuronal dynamics at a physiological level, crucial in the field of neurodegenerative disorders such as Parkinson’s Disease.
