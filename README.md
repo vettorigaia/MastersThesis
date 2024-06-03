@@ -17,14 +17,25 @@ Initially, the signal undergoes filtering with a band-pass Butterworth filter ra
 
 ## Point Process Modeling
 Point Process Modeling is a method used to characterize the inter-spike intervals (ISIs) of neurons, reflecting their firing activity characteristics. In ideal Integrate-and-Fire models, neuronal firing activity follows a Brownian motion pattern, making the inverse Gaussian distribution the most suitable for modeling the neurons’ ISIs. In our study, which examines both healthy neuron populations and those carrying a genetic mutation, the Dirichlet Mixture model emerged as the most effective. This model comprises one inverse Gaussian and two Gaussian distributions. The inverse Gaussian and the first Gaussian distributions are focused on lower time difference values to capture the main peak of ISIs, while the second Gaussian distribution accounts for the tail. The ranges of the parameters (prior probability) are set as follows:
+
 • Inverse Gaussian mean: 0-0.2
+
 • Inverse Gaussian lambda: 0.0001-0.1
+
 • 1st Gaussian mean: 0-0.2
+
 • 1st Gaussian sigma: 0.01-0.7
+
 • 2nd Gaussian mean: 0.2-0.6
+
 • 2nd Gaussian sigma: 0.01-0.7
+
 The model for each neuron is chosen using Maximum A Posteriori estimation, based on Bayes’ theorem. Bayes’ theorem, denoted as:
+
+
 P(θ|y)=[P(y|θ)P(θ)]/P(y)
+
+
 represents the relationship between the posterior probability P(θ|y), the likelihood function P(y|θ), and the prior probability P(θ) of the parameters θ. In our context, we define the prior probabilities of parameters based on their predetermined ranges, as listed above, while the likelihood function is derived from the inter-spike intervals data. By employing MAP estimation, we aim to identify the parameter values that maximize the posterior probability distribution P(θ|y). Each model’s performance is then evaluated using KS distance metrics and KS plots.
 
 ## Classification
