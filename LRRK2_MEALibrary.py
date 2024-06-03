@@ -262,7 +262,6 @@ def clus(cut,spike_list,data,name):
         std_wave = np.std(filtered_cluster_data, axis=0)
         plt.errorbar(range(mean_wave.shape[0]), mean_wave, yerr=std_wave, color='blue', linewidth=2, label='Avg. Waveform')
         plt.legend(loc='lower right')
-        plt.savefig(f'{save_folder}Cluster{i}_{name}')
         plt.show()
         ul=spike_list[labels==i]
         ull=ul
@@ -272,7 +271,6 @@ def clus(cut,spike_list,data,name):
         plt.subplot(3, 1, i + 1)
         plt.hist(np.diff(ull), bins=100, density=True, alpha=0.5, color='blue', edgecolor='black')
         plt.title(f'ISI: Cluster {i}, \n firing rate: {format(len(final_data[i])*10000/len(data), ".2f")} Hz')
-        plt.savefig(f'{save_folder}ISI_Cluster{i}_{name}')
         plt.show()
         
     return final_data, final_firing
@@ -286,7 +284,7 @@ def CDF(ISI_data,cdf_2gauss):
     cdf_emp = np.cumsum(counts * np.diff(bins))
     return cdf_emp,cdf_model
 
-def poiproc(name,input_path,output_path):
+def poiproc(input_path,output_path):
     file_name=input_path.split("/")[-1]
     target=1
     stim=0
@@ -312,7 +310,7 @@ def poiproc(name,input_path,output_path):
         
         ISI_data = np.diff(neuron)/10000
         try:
-            map_estimate = Bayesian_mixture_model(name,counter,ISI_data)
+            map_estimate = Bayesian_mixture_model(ISI_data)
         except Exception as e:
             print(f"An error occured: {e}")
             continue
@@ -328,7 +326,7 @@ def poiproc(name,input_path,output_path):
     final.to_csv(f'{output_path}/'+file_name)
     return dataframe
 
-def Bayesian_mixture_model(name,counter,ISI_data):
+def Bayesian_mixture_model(ISI_data):
     save_folder=PPmodelfolder
     with pm.Model() as model:
         ##### WALD DISTRIBUTION (INVERSE GAUSSIAN)
@@ -383,7 +381,6 @@ def Bayesian_mixture_model(name,counter,ISI_data):
     plt.ylabel('Cumulative Probability')
     plt.title(f'CDF Plot, ksdist={ks_score}, num:{len(ISI_data)}')
     plt.legend()
-    plt.savefig(f'{save_folder}{name}_neuron{counter}_CDFplot.jpg',format='jpg')
     plt.show()
 
     cdf_emp,cdf_model=CDF(ISI_data,cdf_2gauss)
@@ -398,7 +395,6 @@ def Bayesian_mixture_model(name,counter,ISI_data):
     plt.xlabel('Model CDF')
     plt.ylabel('Empirical CDF')
     plt.title(f'KS Plot, ksdist={ks_score}, num:{len(ISI_data)}')
-    plt.savefig(f'{save_folder}{name}_neuron{counter}_KS_QQplot.jpg',format='jpg')
     plt.show()
 
     del map_estimate['w_simplex__']
