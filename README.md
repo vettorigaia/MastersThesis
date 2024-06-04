@@ -1,3 +1,10 @@
+![logo_polimi](https://github.com/vettorigaia/MastersThesis/assets/150171386/84b71717-f285-497f-8b95-834187778b17)
+
+# Scope
+This project was developed as my Master's Thesis in Biomedical Engineering at Politecnico di Milano.
+The project aims to investigate the neural activity patterns of neurons carrying the G2019S mutation of the LRRK2 gene, which is associated with Parkinson's disease (PD).
+Using Microelectrode Array (MEA) technology, neural activity was recorded from both mutated and healthy cortical networks before and after Kainic Acid stimulation, which induces neurotoxic effects. The study developed a three-phase algorithm to process raw MEA recordings (in .h5 format), to classify neural activity into healthy and mutated patterns, and then into four classes (mutated vs. control, pre- vs. post-stimulation), with high accuracy achieved through machine learning models. The research provides insights into the pathophysiological mechanisms underlying PD and offers a novel approach for studying neurodegenerative disorders at the cellular level.
+
 # Analysis of Neural Activity Changes Associated with LRRK2 Gene Mutation: A Computational Approach using In-Vitro Networks
 ## Thesis Abstract
 Parkinson’s disease (PD) is a debilitating neurodegenerative disorder whose etiology is strongly linked to the G2019S mutation of the LRRK2 gene - or Dardarin. 
